@@ -1,8 +1,8 @@
-# System Architecture — <PROJECT_NAME>
+# System Architecture — FARIA
 
 > **Document role:** Authoritative source for the system's high-level technical structure, boundaries, runtime interactions, and architectural invariants.
 >
-> Product behavior belongs in the PRD and feature specs. Decision rationale belongs in ADRs. Exact public interfaces belong in machine-readable contracts. Detailed coding conventions belong in engineering standards.
+> Product behavior belongs in the PRD and feature specs. Decision rationale belongs in ADRs (none yet). Exact public interfaces belong in machine-readable contracts (not created yet). Detailed coding conventions belong in engineering standards.
 
 ---
 
@@ -10,11 +10,11 @@
 
 | Field | Value |
 |---|---|
-| Project | `<PROJECT_NAME>` |
-| Status | Draft / Review / Locked |
+| Project | FARIA |
+| Status | Draft |
 | Version | `0.1` |
-| Architecture Owner | `<OWNER>` |
-| Last Updated | `<YYYY-MM-DD>` |
+| Architecture Owner | sipratama |
+| Last Updated | `2026-09-11` |
 
 ---
 
@@ -22,22 +22,22 @@
 
 ### System Purpose
 
-<Describe what the system does in technical/product terms in 2–4 sentences.>
+FARIA is a private household AI operating system. A conversational agent runtime (Hermes) interprets Telegram messages from an allowlisted household, orchestrates a small set of household-domain skills/personas, and reads/writes authoritative household state through a constrained Household MCP tool boundary backed by SQLite. A web dashboard gives the household visibility into agent/persona activity.
 
 ### Architecture Style
 
-`<MODULAR MONOLITH / HEXAGONAL / LAYERED / MICROSERVICES / EVENT-DRIVEN / OTHER>`
+Modular monolith (single Hermes runtime with multiple skills/personas) + a separate constrained domain-tool service (Household MCP) + a separate dashboard web app.
 
 ### Primary Runtime Components
 
-- `<FRONTEND>`
-- `<BACKEND>`
-- `<DATABASE>`
-- `<CACHE>`
-- `<MESSAGE BROKER>`
-- `<EXTERNAL SERVICE>`
-
-Only list components that actually exist or are explicitly planned.
+- Telegram (external, human interface)
+- Hermes Agent Runtime (conversational orchestration, skills, cron)
+- 9Router (model gateway)
+- OpenRouter (model provider)
+- Household MCP server (domain tool boundary)
+- SQLite (authoritative structured store)
+- Dashboard (React/Next.js web app, Agent Control Center)
+- Encrypted external backup destination (provider TBD)
 
 ---
 
@@ -45,149 +45,114 @@ Only list components that actually exist or are explicitly planned.
 
 The architecture should optimize for:
 
-1. `<OBJECTIVE>`
-2. `<OBJECTIVE>`
-3. `<OBJECTIVE>`
-
-Examples:
-
-- rapid product iteration;
-- clear domain boundaries;
-- predictable deployment;
-- secure handling of user data;
-- horizontal scalability for stateless workloads;
-- low operational complexity.
+1. Keeping the household's financial state trustworthy and auditable, never solely inferred by an LLM.
+2. Letting the household interact conversationally without exposing unrestricted capability to the LLM.
+3. Staying portable/deployable on a single always-on host without unnecessary infrastructure.
 
 ### Non-Objectives
 
 The architecture is not currently optimized for:
 
-- `<NON_OBJECTIVE>`
-- `<NON_OBJECTIVE>`
-
-This section prevents premature complexity.
+- Multi-tenant SaaS scalability.
+- High-throughput/high-concurrency workloads (single household, low request volume).
+- Independent multi-agent orchestration between personas (V1 uses one runtime with multiple skills).
 
 ---
 
 ## 3. System Context
 
-Describe actors and external systems.
-
 ```text
-+-----------------+
-|      User       |
-+--------+--------+
-         |
-         v
-+-----------------+
-|   Web / App UI  |
-+--------+--------+
-         |
-         v
-+-----------------+        +------------------+
-|     Backend     |------->| External Service |
-+--------+--------+        +------------------+
-         |
-         v
-+-----------------+
-|    Database     |
-+-----------------+
++-------------------+
+|  Household Owner  |
+|  + Spouse         |
++---------+---------+
+          | Telegram private group (allowlisted)
+          v
++-------------------+        +------------------+
+|   Hermes Runtime  |------->|     9Router      |
+| (skills + cron)   |        +--------+---------+
++---------+---------+                 |
+          |                            v
+          |                  +------------------+
+          |                  |   OpenRouter     |
+          |                  | (household-main) |
+          |                  +------------------+
+          v
++-------------------+
+|  Household MCP    |
++---------+---------+
+          v
++-------------------+        +------------------+
+|      SQLite       |------->|  Encrypted       |
+| (authoritative)    |        |  Backup (TBD)   |
++-------------------+        +------------------+
+          ^
+          | read via application/API boundary
++-------------------+
+|     Dashboard      |
+| (Agent Control     |
+|  Center)           |
++-------------------+
 ```
-
-Replace this diagram with the actual system context.
 
 ### External Actors
 
 | Actor | Interaction |
 |---|---|
-| `<ACTOR>` | `<INTERACTION>` |
+| Household Owner | Sends/receives Telegram messages, views dashboard |
+| Spouse | Sends/receives Telegram messages, views dashboard |
 
 ### External Systems
 
 | System | Purpose | Protocol | Criticality |
 |---|---|---|---|
-| `<SYSTEM>` | `<PURPOSE>` | HTTPS / Kafka / SMTP / etc. | Low / Medium / High |
+| Telegram Bot API | Conversational interface | HTTPS | High |
+| OpenRouter (via 9Router) | LLM inference | HTTPS | High |
+| Encrypted backup destination (TBD) | Durable off-host copy of SQLite data | TBD | High |
 
 ---
 
 ## 4. Container / Runtime View
 
-Describe independently deployable or operationally meaningful components.
-
 | Component | Responsibility | Technology | Deployment Unit |
 |---|---|---|---|
-| `<WEB>` | `<RESPONSIBILITY>` | `<TECH>` | `<UNIT>` |
-| `<API>` | `<RESPONSIBILITY>` | `<TECH>` | `<UNIT>` |
-| `<WORKER>` | `<RESPONSIBILITY>` | `<TECH>` | `<UNIT>` |
+| Hermes Runtime | Conversational orchestration, skills/personas, cron/routines | Hermes Agent | Container |
+| Household MCP | Constrained domain tool server for authoritative state | Custom MCP server | Container |
+| Dashboard | Agent Control Center web UI | React / Next.js | Container |
+| SQLite | Authoritative structured data | SQLite file | Volume on host |
 
 ### Deployment Relationships
 
 ```text
-<Client>
+Telegram
    |
    v
-<Frontend>
+Hermes Runtime -----> 9Router -----> OpenRouter
    |
    v
-<Backend/API>
-   |        \
-   v         v
-<DB>      <Broker>
-             |
-             v
-          <Worker>
+Household MCP
+   |
+   v
+SQLite (+ encrypted backup)
+   ^
+   | API boundary
+Dashboard
 ```
-
-Use diagrams only when they clarify a real boundary.
 
 ---
 
 ## 5. Frontend Architecture
 
-Complete when the project contains a frontend.
+The dashboard is a React/Next.js web app. It:
 
-### Responsibilities
+- displays persona status (Idle/Working/Scheduled/Error), current/last task, last activity, next scheduled task, health, model alias, basic AI usage/cost, and pending confirmations;
+- reads household/agent-activity state only through an application/API boundary — it must not read the SQLite file directly.
 
-The frontend owns:
-
-- rendering and interaction;
-- client-side navigation;
-- presentation state;
-- input collection and local validation;
-- consuming server contracts;
-- accessibility and responsive behavior.
-
-The frontend does **not** own authoritative security or business rules unless explicitly stated.
-
-### Structure
-
-```text
-src/
-├── app/
-├── features/
-├── components/
-├── services/
-├── hooks/
-├── state/
-├── types/
-└── utils/
-```
-
-Replace with the actual structure.
-
-### State Strategy
-
-| State Type | Owner / Mechanism |
-|---|---|
-| Server state | `<TOOL / PATTERN>` |
-| Local UI state | `<TOOL / PATTERN>` |
-| Form state | `<TOOL / PATTERN>` |
-| Global client state | `<TOOL / PATTERN OR NONE>` |
+Exact component structure and client-state-management choices are not fixed yet (see Open Architecture Questions); no speculative structure is defined here. 2D/3D visualization is explicitly out of scope for V1 (see Product Brief Non-Goals).
 
 ### Frontend Boundaries
 
-- `<BOUNDARY>`
-- `<BOUNDARY>`
+- The dashboard does not own authoritative business rules or authorization; it reflects state exposed by the backend/API boundary.
 
 ---
 
@@ -195,40 +160,32 @@ Replace with the actual structure.
 
 ### Responsibilities
 
-The backend owns:
+- **Hermes Runtime**: conversational orchestration, intent recognition, presenting drafts, invoking Household MCP tools, running scheduled routines (Hermes Cron).
+- **Household MCP**: the only component authorized to validate and mutate authoritative household state in SQLite.
 
-- authoritative business rules;
-- authentication/authorization enforcement;
-- domain state transitions;
-- persistence coordination;
-- external integration orchestration;
-- server-side validation;
-- reliability controls;
-- audit-relevant behavior.
-
-### Module / Domain Boundaries
+### Module / Domain Boundaries (logical, within Hermes)
 
 | Module | Responsibility | Owns Data? | May Depend On |
 |---|---|---:|---|
-| `<MODULE>` | `<RESPONSIBILITY>` | Yes / No | `<DEPENDENCIES>` |
+| Finance Agent (skill) | Monthly allocation, household budget, personal allowances | No | Household MCP |
+| Giving Agent (skill) | Zakat penghasilan, sedekah | No | Household MCP |
+| Home Ops Agent (skill) | Routines, maintenance, reminders | No | Household MCP |
+| Planner Agent (skill) | Cross-cutting scheduling/summary | No | Household MCP, other skills |
+| Household MCP | All of the above domain state | Yes | SQLite |
+
+**Important:** Finance Agent, Giving Agent, Home Ops Agent, and Planner Agent are logical personas/skills running inside **one Hermes runtime** in V1 — they are **not** independent autonomous LLM agents. The dashboard may visually represent them as separate staff members, but there is one runtime, one model-gateway path, and one authoritative store behind all four. This may evolve into genuinely independent agents later if real requirements justify it (see Open Architecture Questions, AQ-06).
 
 ### Dependency Direction
 
 ```text
-Transport / Delivery
+Telegram (transport)
         ↓
-Application
+Hermes skills (application)
         ↓
-Domain
-        ↑
-Ports / Interfaces
-        ↑
-Infrastructure
+Household MCP (ports/interface to domain state)
+        ↓
+SQLite (infrastructure)
 ```
-
-Replace this if the project uses another architecture.
-
-The chosen dependency rule should be explicit and consistently enforced.
 
 ---
 
@@ -236,15 +193,18 @@ The chosen dependency rule should be explicit and consistently enforced.
 
 ### Domain Boundaries
 
-Describe the important domain boundaries and who owns each state transition.
+Household MCP owns all authoritative household domain state (allocations, savings, giving records, routines). Hermes skills own no persistent state themselves — they orchestrate and present, but do not write directly to SQLite.
 
 ### Data Ownership
 
 | Data / Aggregate | Owning Module | Authoritative Store |
 |---|---|---|
-| `<DATA>` | `<MODULE>` | `<STORE>` |
-
-Avoid shared ownership of the same mutable data where possible.
+| Household / Member profile | Household MCP | SQLite |
+| MonthlyAllocation / AllocationItem | Household MCP | SQLite |
+| SavingsGoal / SavingsContribution | Household MCP | SQLite |
+| GivingRecord (zakat/sedekah) | Household MCP | SQLite |
+| HouseholdRoutine | Household MCP | SQLite |
+| AgentActivity (dashboard feed) | Household MCP (ownership TBD, see Open Architecture Questions) | SQLite |
 
 ---
 
@@ -254,30 +214,31 @@ Avoid shared ownership of the same mutable data where possible.
 
 | Store | Purpose | Data Type |
 |---|---|---|
-| `<POSTGRESQL>` | `<PURPOSE>` | Transactional |
-| `<REDIS>` | `<PURPOSE>` | Cache / ephemeral |
-| `<OBJECT STORAGE>` | `<PURPOSE>` | Files |
+| SQLite | Authoritative household financial/operational state | Transactional |
+
+No cache or message broker exists in V1.
 
 ### Schema Management
 
-Persistent schema changes are managed through version-controlled migrations.
+Persistent schema changes are managed through version-controlled migrations. Exact migration tooling is not yet selected (see Open Architecture Questions).
 
 ### Transactions
 
-Define transaction boundaries and consistency expectations.
-
-- `<RULE>`
-- `<RULE>`
+A confirmed allocation and its line items must be persisted atomically; a draft never partially becomes authoritative.
 
 ### Data Retention
 
-`<POLICY OR LINK>`
+Indefinite while the household uses FARIA (see PRD, Data and Privacy Expectations).
 
 ### Backup / Recovery Assumptions
 
-`<POLICY OR LINK>`
+The SQLite file must have an encrypted external backup; the application server's local disk is not the sole durable copy. Backup destination/mechanism is an open decision (see Open Architecture Questions).
 
-Detailed entity definitions belong in `DATA_MODEL.md` and migrations.
+### Why SQLite (not LLM memory) is authoritative
+
+Hermes/LLM memory is probabilistic and not guaranteed to persist or remain accurate across sessions or model changes. Financial correctness requires a deterministic, auditable, queryable store. SQLite is sufficient for single-household V1 scale and needs no separate database server.
+
+Detailed entity definitions belong in `DATA_MODEL.md`.
 
 ---
 
@@ -285,55 +246,27 @@ Detailed entity definitions belong in `DATA_MODEL.md` and migrations.
 
 ### API Style
 
-`<REST / GRAPHQL / RPC / MIXED>`
+Household MCP tools (constrained, function-call-style interface for the LLM — not open REST) plus a conventional application/API boundary between the dashboard and backend state. The exact dashboard API style (REST vs. RPC) is not fixed yet (see Open Architecture Questions).
 
 ### Contract Source
 
-`<contracts/openapi/openapi.yaml>`
+Household MCP tool contracts, expected to include operations such as `create_monthly_allocation`, `get_current_allocation`, `confirm_monthly_allocation`, `create_savings_goal`, `record_savings_contribution`, `get_savings_progress`, `record_zakat`, `record_sedekah`, `create_household_routine`, `complete_household_routine`, and `get_household_summary`. Exact parameter/response shapes are refined during implementation, not invented here.
 
 ### API Principles
 
-- explicit versioning strategy;
-- stable error model;
-- predictable pagination where needed;
-- idempotency for relevant mutating operations;
-- authentication and authorization at server boundaries;
-- backward-compatible evolution where practical.
+- the LLM never receives raw SQL or shell access;
+- every state-changing tool call is scoped to one domain operation;
+- material financial changes require the confirmation step (PRD PR-001) before any Household MCP write occurs.
 
 ### Error Model
 
-Describe the common error envelope and how domain errors map to transport errors.
-
-Do not duplicate the full OpenAPI definition here.
+To be defined at implementation time; must distinguish "not yet confirmed" from "failed to persist" so Hermes never claims a change succeeded when it did not.
 
 ---
 
 ## 10. Event and Async Architecture
 
-Complete when asynchronous communication exists.
-
-### Broker
-
-`<KAFKA / RABBITMQ / SQS / NONE>`
-
-### Event Contract Source
-
-`<contracts/asyncapi/asyncapi.yaml>`
-
-### Event Principles
-
-- event names describe facts, not commands, unless intentionally modeled otherwise;
-- consumers should tolerate retries;
-- idempotency strategy must be explicit;
-- ordering assumptions must be documented;
-- poison messages and dead-letter behavior must be defined;
-- schema evolution must be backward compatible where required.
-
-### Key Events
-
-| Event | Producer | Consumers | Delivery Semantics |
-|---|---|---|---|
-| `<EVENT>` | `<MODULE>` | `<CONSUMERS>` | At-least-once / etc. |
+Not applicable for V1 — no message broker or asynchronous event contract exists. Hermes Cron handles scheduled/recurring work deterministically without requiring an event bus.
 
 ---
 
@@ -341,84 +274,70 @@ Complete when asynchronous communication exists.
 
 ### Authentication
 
-`<SESSION / JWT / OIDC / KEYCLOAK / CLERK / OTHER>`
+Telegram identity, restricted by an explicit allowlist (not Telegram-native auth alone).
 
 ### Authorization Model
 
-`<RBAC / ABAC / OWNERSHIP / POLICY-BASED / MIXED>`
+Ownership-based — both allowlisted household members have full access to the shared household context; no differentiated roles in V1.
 
 ### Enforcement Boundary
 
-Authoritative authorization is enforced at:
-
-`<BACKEND / GATEWAY / SERVICE>`
+The allowlist check happens before Hermes processes a message; Household MCP additionally scopes every tool call to allowed operations, so authorization is not delegated to the LLM's judgment alone.
 
 ### Identity Flow
 
 ```text
-User
+Telegram user
   ↓
-Identity Provider
+Allowlist check (Hermes)
   ↓
-Application
+Hermes skill processing
   ↓
-Authorization Check
+Household MCP tool authorization
   ↓
-Protected Resource
+SQLite (protected resource)
 ```
-
-Reference detailed security decisions through ADRs or the threat model.
 
 ---
 
 ## 12. Security and Trust Boundaries
-
-Identify the major trust boundaries.
-
-Examples:
 
 ```text
 Internet
   |
   | trust boundary
   v
-Frontend / Edge
+Telegram Bot API
+  |
+  | trust boundary (allowlist)
+  v
+Hermes Runtime
+  |
+  | trust boundary (tool contract)
+  v
+Household MCP
   |
   | trust boundary
   v
-Backend
-  |
-  | trust boundary
-  v
-Database / Internal Services
+SQLite / Backup
 ```
 
 ### Security Invariants
 
-- secrets are not stored in source code;
-- client input is untrusted;
-- authorization is not delegated only to the UI;
-- sensitive values are not written to logs;
-- external callbacks are validated;
-- privileged operations are auditable where required.
+- secrets (Telegram bot token, OpenRouter/9Router keys) are not committed to source and come from runtime environment configuration;
+- only allowlisted Telegram identities are processed;
+- the LLM never receives raw SQL or shell access — only Household MCP's constrained tools;
+- material financial state changes require explicit human confirmation before persistence;
+- 9Router and Household MCP are not publicly exposed beyond what Hermes/dashboard need;
+- privileged/state-changing Household MCP calls should be auditable (who/when/what).
 
-Add project-specific invariants.
-
-Detailed threats belong in `THREAT_MODEL.md`.
+This summary is the V1 trust-boundary reference. A dedicated Threat Model document (`docs/04_engineering/THREAT_MODEL.md`) is deferred until FARIA's trust boundaries grow beyond this single-household scope.
 
 ---
 
 ## 13. Caching
 
-Complete when caching exists.
-
-| Cache | Purpose | Key Strategy | TTL | Invalidation |
-|---|---|---|---|---|
-| `<CACHE>` | `<PURPOSE>` | `<KEY>` | `<TTL>` | `<STRATEGY>` |
-
-Caching must not become an undocumented source of truth.
-
-State which data may be stale and for how long.
+Not applicable for V1 — no cache layer exists.
 
 ---
 
@@ -426,27 +345,22 @@ State which data may be stale and for how long.
 
 ### Timeouts
 
-All remote calls should have explicit timeout behavior.
+Hermes → 9Router → OpenRouter calls must have explicit timeout behavior (exact values TBD at implementation).
 
 ### Retries
 
-Retry only failures that are safe and meaningful to retry.
+Safe to retry read-only Household MCP calls (e.g. `get_current_allocation`). Write operations (e.g. `confirm_monthly_allocation`) must be idempotent per period to tolerate retries/duplicate confirmation attempts.
 
 ### Idempotency
 
-Define idempotency requirements for operations vulnerable to duplicate execution.
-
-### Circuit Breaking / Degradation
-
-`<STRATEGY OR N/A>`
+Confirming the same allocation twice for the same period must not create duplicate authoritative records (see `docs/01_features/monthly-allocation.md`, BR-03).
 
 ### Partial Failure
 
-Describe behavior when dependencies fail.
-
 | Dependency | Failure Behavior | User Impact | Recovery |
 |---|---|---|---|
-| `<DEPENDENCY>` | `<BEHAVIOR>` | `<IMPACT>` | `<RECOVERY>` |
+| Household MCP unavailable | Hermes reports failure, does not claim persistence succeeded | User must retry | Retry once MCP is reachable |
+| OpenRouter/9Router unavailable | Hermes cannot generate a response | User sees no/delayed reply | Retry once model gateway is reachable |
 
 ---
 
@@ -454,28 +368,15 @@ Describe behavior when dependencies fail.
 
 ### Logs
 
-Structured logs should include enough context to correlate important operations without exposing sensitive data.
+Structured logs for allocation draft/confirm events and Household MCP tool calls, without logging secrets or unnecessary full financial detail.
 
 ### Metrics
 
-Track system and business signals relevant to reliability.
-
-### Tracing
-
-Use distributed tracing when cross-service or external-call visibility is materially useful.
-
-### Correlation
-
-Define the request/correlation identifier strategy.
+Basic AI usage/cost per persona for the dashboard; `allocation_confirmed` counts.
 
 ### Health
 
-Document:
-
-- liveness;
-- readiness;
-- dependency health;
-- background worker health.
+The dashboard's persona health signal (Idle/Working/Scheduled/Error) is the primary V1 health signal; no separate liveness/readiness endpoint design is specified yet.
 
 ---
 
@@ -486,15 +387,13 @@ Document:
 | Environment | Purpose | Data |
 |---|---|---|
 | Local | Developer execution | Local/mock |
-| Test | Automated testing | Ephemeral |
-| Staging | Pre-production verification | Non-production |
-| Production | Live users | Production |
+| Production | Live household usage on a single always-on host | Production |
 
-Adjust to project reality.
+No separate staging environment is planned yet given single-household scale.
 
 ### Runtime Platform
 
-`<DOCKER / KUBERNETES / OPENSHIFT / VERCEL / VPS / SERVERLESS / OTHER>`
+Docker containers on an always-on Linux host.
 
 ### Deployment Diagram
 
@@ -502,100 +401,58 @@ Adjust to project reality.
 Internet
    |
    v
-<Edge / LB>
+Always-on Linux host (Docker)
    |
-   +------> <Frontend>
+   +------> Hermes Runtime container
    |
-   +------> <Backend>
-               |
-        +------+------+
-        |             |
-        v             v
-      <DB>         <Broker>
+   +------> Household MCP container
+   |
+   +------> Dashboard container
+   |
+   +------> SQLite volume ---> Encrypted backup (off-host, TBD)
 ```
 
 ### Configuration
 
-Runtime configuration comes from environment-specific configuration and secret management, not hard-coded values.
-
-See `docs/05_operations/CONFIGURATION.md`.
+Runtime configuration and secrets come from environment/runtime secret configuration, never hard-coded values.
 
 ---
 
 ## 17. Scalability
 
-Document real expected pressure points.
-
-### Expected Load
-
-| Dimension | Current / Initial | Expected Growth |
-|---|---:|---:|
-| Users | `<N>` | `<N>` |
-| Requests/sec | `<N>` | `<N>` |
-| Events/sec | `<N>` | `<N>` |
-| Stored data | `<SIZE>` | `<SIZE>` |
-
-### Scaling Strategy
-
-- `<STATELESS HORIZONTAL SCALING>`
-- `<DB INDEX / REPLICA / PARTITIONING IF NEEDED>`
-- `<WORKER SCALING>`
-- `<CDN / CACHE>`
-
-Do not introduce distributed architecture only for hypothetical scale.
+Expected load is a single household (2 users) — negligible request volume. No horizontal scaling, load balancing, or distributed architecture is justified for V1; introducing it would be premature complexity.
 
 ---
 
 ## 18. Performance Assumptions
 
-High-level performance targets belong in `NON_FUNCTIONAL_REQUIREMENTS.md`.
-
-This document should explain the architectural strategy used to meet them.
-
-Examples:
-
-- read-heavy paths may use caching;
-- long-running work moves to background processing;
-- large files use object storage;
-- expensive queries require indexing and measurement.
+No formal performance targets are defined for V1 (see `docs/02_architecture/NON_FUNCTIONAL_REQUIREMENTS.md`, not activated). Conversational latency is bounded mainly by the OpenRouter model call; no caching or precomputation is needed at this scale.
 
 ---
 
 ## 19. Architecture Invariants
 
-These are rules that must remain true unless an ADR explicitly changes them.
+### INV-01 — Household MCP is the only writer of authoritative state
 
-### INV-01 — `<INVARIANT>`
+Only Household MCP may write authoritative household domain state; Hermes skills must not write to SQLite directly.
 
-<Example: Domain modules must not depend directly on HTTP controllers.>
+### INV-02 — No unrestricted LLM data access
 
-### INV-02 — `<INVARIANT>`
+The LLM/agent must never be given raw SQL or shell execution access.
 
-<Example: Public API schemas are defined in OpenAPI before implementation changes are considered complete.>
+### INV-03 — Confirmation before persistence
 
-### INV-03 — `<INVARIANT>`
+A financial allocation (or other material state change) must not be persisted as authoritative without an explicit prior human confirmation step.
 
-<Example: Only the payment module may mutate authoritative payment state.>
+### INV-04 — Personas remain logical skills in V1
 
-Architecture invariants are especially important for AI-assisted development.
+Finance/Giving/Home Ops/Planner personas remain logical skills within one Hermes runtime unless a future ADR explicitly changes this to independent agents.
 
 ---
 
 ## 20. Architecture Decision Records
 
-Material decisions are stored under:
-
-```text
-docs/02_architecture/adr/
-```
-
-Relevant ADRs:
-
-| ADR | Decision | Status |
-|---|---|---|
-| `ADR-0001` | `<DECISION>` | Accepted |
-
-Do not duplicate ADR rationale in this document. Summarize and link.
+No ADRs exist yet. The technical direction in this document (Hermes, 9Router, OpenRouter, Household MCP, SQLite, Docker) reflects an accepted product decision provided during initialization (see Product Brief, Section 9/Fixed Technical Direction) rather than a locally deliberated architecture trade-off. It is recorded here as the current baseline rather than as a formal ADR, consistent with avoiding unnecessary ADRs during initialization.
 
 ---
 
@@ -603,15 +460,15 @@ Do not duplicate ADR rationale in this document. Summarize and link.
 
 ### Technical Constraints
 
-- `<CONSTRAINT>`
+- SQLite (not PostgreSQL); no Redis/Kafka; single Hermes runtime (no independent multi-agent architecture) for V1.
 
 ### Operational Constraints
 
-- `<CONSTRAINT>`
+- Single always-on host; hosting provider not yet finalized.
 
 ### Legacy / Integration Constraints
 
-- `<CONSTRAINT>`
+- None — greenfield project.
 
 ---
 
@@ -619,9 +476,8 @@ Do not duplicate ADR rationale in this document. Summarize and link.
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| `<RISK>` | `<IMPACT>` | `<MITIGATION>` |
-
-Project-level risk ownership belongs in `docs/06_delivery/RISKS.md`.
+| Single SQLite file/host is a single point of failure | Household financial data loss if the host fails without backup | Encrypted external backup (destination TBD) before production use |
+| Model/provider behind the `household-main` alias may change | Inconsistent response quality/latency | Keep Hermes decoupled from a specific physical model via the 9Router alias |
 
 ---
 
@@ -629,7 +485,12 @@ Project-level risk ownership belongs in `docs/06_delivery/RISKS.md`.
 
 | ID | Question | Decision Needed By | Owner |
 |---|---|---|---|
-| AQ-01 | `<QUESTION>` | `<MILESTONE>` | `<OWNER>` |
+| AQ-01 | Final hosting provider (XCodePod.Cloud vs. paid VPS) | Before deployment | Household |
+| AQ-02 | Exact Household MCP tool contract shapes | Before Household MCP implementation | Implementation |
+| AQ-03 | Migration/schema tooling for SQLite | Before first schema is created | Implementation |
+| AQ-04 | Encrypted backup destination and mechanism | Before production use | Household |
+| AQ-05 | Dashboard framework specifics beyond "React/Next.js" (state management, exact API style) | Before dashboard implementation | Implementation |
+| AQ-06 | Whether personas ever become independent agents | Only if real requirements justify it | Household / Implementation |
 
 When resolved, create an ADR if the decision is architecturally material.
 
@@ -637,15 +498,7 @@ When resolved, create an ADR if the decision is architecturally material.
 
 ## 24. Change Rules
 
-Update this document when:
-
-- a system boundary changes;
-- a deployable component is added or removed;
-- ownership of domain data changes;
-- integration topology changes materially;
-- security or trust boundaries change;
-- persistence architecture changes;
-- reliability architecture changes.
+Update this document when: Household MCP's role, Hermes's single-runtime model, SQLite's authoritative role, or the confirmation boundary change; when a new deployable component or trust boundary is introduced; when the hosting/backup decision is finalized.
 
 Do not update this document for routine internal refactoring that preserves the architecture.
 
@@ -657,11 +510,6 @@ Do not update this document for routine internal refactoring that preserves the 
 - PRD: `../00_product/PRD.md`
 - Feature Specs: `../01_features/`
 - Data Model: `./DATA_MODEL.md`
-- NFR: `./NON_FUNCTIONAL_REQUIREMENTS.md`
-- ADRs: `./adr/`
-- Test Strategy: `../04_engineering/TEST_STRATEGY.md`
-- Threat Model: `../04_engineering/THREAT_MODEL.md`
-- Deployment: `../05_operations/DEPLOYMENT.md`
 - Standards: `../standards/`
 
 ---
@@ -670,4 +518,4 @@ Do not update this document for routine internal refactoring that preserves the 
 
 | Version | Date | Change | Author |
 |---|---|---|---|
-| 0.1 | `<YYYY-MM-DD>` | Initial draft | `<AUTHOR>` |
+| 0.1 | `2026-09-11` | Initial draft | sipratama |

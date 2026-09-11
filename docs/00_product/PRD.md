@@ -1,4 +1,4 @@
-# Product Requirements Document (PRD) — <PROJECT_NAME>
+# Product Requirements Document (PRD) — FARIA
 
 > **Peran dokumen:** Source of truth untuk **apa yang harus disediakan product pada level capability, cross-feature behavior, user journey, dan release scope**.
 >
@@ -10,18 +10,18 @@
 
 | Field | Value |
 |---|---|
-| Product | `<PROJECT_NAME>` |
-| Status | Draft / Review / Locked |
+| Product | FARIA |
+| Status | Draft |
 | Version | `0.1` |
-| Owner | `<OWNER>` |
-| Last Updated | `<YYYY-MM-DD>` |
-| Target Release / Phase | `<MILESTONE>` |
+| Owner | sipratama |
+| Last Updated | `2026-09-11` |
+| Target Release / Phase | V1 — personal MVP |
 
 ---
 
 ## 1. Product Summary
 
-<Jelaskan product dalam 2–4 kalimat dari sisi capability dan user outcome. Jangan mengulang seluruh Product Brief.>
+FARIA adalah AI household operating system privat yang membantu household owner dan spouse mengelola alokasi bulanan uang, zakat dan sedekah, savings goals, household operating budget, personal allowance, dan household routines melalui antarmuka percakapan Telegram, dengan web dashboard untuk memonitor aktivitas agent/persona.
 
 ### Product Brief Reference
 
@@ -29,19 +29,15 @@ Canonical product intent:
 
 `./PRODUCT_BRIEF.md`
 
-Jika product purpose, target users, strategic outcome, success metric, atau product-level assumption berubah, update Product Brief.
-
 ---
 
 ## 2. Actors
 
-Hanya actor yang diperlukan untuk memahami product behavior.
-
 | Actor | Primary Goal | Access / Responsibility |
 |---|---|---|
-| `<ACTOR>` | `<GOAL>` | `<SCOPE>` |
-
-Detailed persona/context tetap berada di Product Brief.
+| Household Owner | Mengelola finance/routine rumah tangga lewat Telegram dan dashboard | Full access ke shared household context |
+| Spouse | Sama dengan Household Owner | Full access ke shared household context |
+| Hermes (agent runtime) | Menginterpretasi request, mengusulkan aksi, menegakkan confirmation | Beraksi hanya lewat Household MCP tools |
 
 ---
 
@@ -49,111 +45,249 @@ Detailed persona/context tetap berada di Product Brief.
 
 ### In Scope
 
-- `<CAPABILITY>`
-- `<CAPABILITY>`
+- Monthly allocation (draft + confirm).
+- Savings goals dan contributions.
+- Zakat penghasilan dan sedekah sebagai recurring allocation.
+- Household operating budget allocation.
+- Personal allowances.
+- Household routines/reminders sederhana.
+- Telegram conversational interaction dengan allowlist.
+- Dashboard monitoring aktivitas agent/persona.
+- Human confirmation untuk material financial changes.
+- AI scope boundary enforcement.
 
 ### Out of Scope
 
-- `<OUT_OF_SCOPE>`
-- `<OUT_OF_SCOPE>`
-
-Product Brief menjelaskan MVP hypothesis/boundary. PRD menerjemahkannya menjadi capability scope yang lebih konkret.
+- Transaction-level expense tracking.
+- Multi-household / SaaS.
+- Integrasi bank/payment otomatis.
+- Independent multi-agent architecture.
+- Visualisasi dashboard 2D/3D.
+- Mobile app.
 
 ---
 
 ## 4. Product Capabilities
 
-Gunakan stable capability ID:
+### CAP-ALLOC-001 — Monthly Allocation
 
-```text
-CAP-<DOMAIN>-<NUMBER>
-```
+**Description**
+Household dapat mencatat income bulanan dan menerima draft alokasi zakat, sedekah, savings, household budget, dan personal allowance, yang menjadi authoritative hanya setelah dikonfirmasi.
 
-### CAP-<DOMAIN>-001 — <CAPABILITY_NAME>
-
-**Description**  
-<Jelaskan capability dari sudut pandang product.>
-
-**User Outcome**  
-<Outcome yang diterima user.>
+**User Outcome**
+Alokasi bulanan yang predictable dan low-effort tanpa pencatatan transaksi.
 
 **Primary Actors**
-- `<ACTOR>`
+- Household Owner, Spouse.
 
-**Priority**  
-P0 / P1 / P2
-
-**Related Feature Specs**
-- `../01_features/<feature>.md`
-
-### CAP-<DOMAIN>-002 — <CAPABILITY_NAME>
-
-**Description**  
-<Description>
-
-**User Outcome**  
-<Outcome>
-
-**Priority**  
-P0 / P1 / P2
+**Priority**
+P0
 
 **Related Feature Specs**
-- `../01_features/<feature>.md`
+- `../01_features/monthly-allocation.md`
+
+### CAP-SAVE-001 — Savings & Goals
+
+**Description**
+Household dapat membuat savings goals, mencatat contribution, dan melihat progress terhadap target amount/date.
+
+**User Outcome**
+Progress savings yang terlihat dan dapat dipercaya.
+
+**Priority**
+P0
+
+**Related Feature Specs**
+- TBD — belum dibuat; lihat Product Brief MVP Boundary.
+
+### CAP-GIVE-001 — Zakat & Sedekah
+
+**Description**
+Household dapat mencatat zakat penghasilan dan sedekah sebagai recurring allocation bulanan yang terpisah, dengan aturan/nominal yang dapat dikonfigurasi, bukan di-hardcode.
+
+**User Outcome**
+Zakat dan sedekah tidak pernah terlewat diam-diam.
+
+**Priority**
+P0
+
+**Related Feature Specs**
+- TBD.
+
+### CAP-BUDGET-001 — Household Operating Budget
+
+**Description**
+Household dapat mengalokasikan satu nominal bulanan untuk operasional rumah tangga tanpa visibility level transaksi.
+
+**User Outcome**
+Biaya operasional rumah tangga terdanai tanpa overhead pencatatan.
+
+**Priority**
+P0
+
+**Related Feature Specs**
+- TBD.
+
+### CAP-ALLOW-001 — Personal Allowances
+
+**Description**
+Household dapat mengalokasikan personal allowance bulanan tetap per spouse; FARIA hanya melacak nominal dan status alokasi, bukan penggunaannya.
+
+**User Outcome**
+Discretionary spending yang predictable tanpa kehilangan privasi.
+
+**Priority**
+P0
+
+**Related Feature Specs**
+- TBD.
+
+### CAP-ROUTINE-001 — Household Routines & Reminders
+
+**Description**
+Household dapat membuat routine/reminder rumah tangga berulang atau one-off (misalnya service AC, bill reminder) dan menandainya selesai.
+
+**User Outcome**
+Obligation berulang tidak terlewat.
+
+**Priority**
+P1
+
+**Related Feature Specs**
+- TBD.
+
+### CAP-CHAT-001 — Telegram Conversational Interaction
+
+**Description**
+Household berinteraksi dengan FARIA lewat private Telegram group yang dibatasi allowlist eksplisit.
+
+**User Outcome**
+Interaksi household yang low-friction dan natural language.
+
+**Priority**
+P0
+
+**Related Feature Specs**
+- `../01_features/monthly-allocation.md` (slice pertama yang mengujinya).
+
+### CAP-DASH-001 — Dashboard Monitoring (Agent Control Center)
+
+**Description**
+Web dashboard menampilkan status setiap persona household (Idle/Working/Scheduled/Error), current/last task, last activity, next scheduled task, health, model alias, dan pending confirmation.
+
+**User Outcome**
+Household dapat melihat apa yang sedang dilakukan FARIA dan kenapa.
+
+**Priority**
+P1
+
+**Related Feature Specs**
+- `../01_features/monthly-allocation.md` (langkah dashboard reflection).
+
+### CAP-APPROVE-001 — Human Confirmation Boundary
+
+**Description**
+FARIA mengusulkan perubahan financial/state material; manusia harus mengonfirmasi secara eksplisit sebelum disimpan sebagai authoritative.
+
+**User Outcome**
+Household mempertahankan kontrol penuh atas keputusan yang memengaruhi uang.
+
+**Priority**
+P0
+
+**Related Feature Specs**
+- `../01_features/monthly-allocation.md`
+
+### CAP-SCOPE-001 — AI Scope Boundary
+
+**Description**
+FARIA menolak permintaan di luar scope household finance/operations, ditegakkan lewat domain instructions, constrained tool allowlist (Household MCP), dan intent validation — bukan hanya system prompt.
+
+**User Outcome**
+FARIA tetap menjadi household assistant, bukan chatbot umum.
+
+**Priority**
+P0
+
+**Related Feature Specs**
+- TBD.
 
 ---
 
 ## 5. Primary User Journeys
 
-PRD hanya menyimpan cross-feature journey.
+### J-01 — Monthly Allocation (first vertical slice)
 
-Detailed within-feature flow berada di Feature Spec. UX interaction detail dapat berada di `../03_design/UX_FLOWS.md`.
-
-### J-01 — <JOURNEY_NAME>
-
-**Actor:** `<ACTOR>`  
-**Goal:** `<GOAL>`
+**Actor:** Household Owner
+**Goal:** mengubah income bulanan menjadi alokasi yang terkonfirmasi
 
 ```text
-<ENTRY>
+Telegram: pesan income diterima
    ↓
-<STEP>
+Hermes mengenali intent monthly-allocation
    ↓
-<STEP>
+Household MCP: get current allocation rules/state
    ↓
-<OUTCOME>
+Hermes mengusulkan DRAFT allocation
+   ↓
+Household mengonfirmasi
+   ↓
+Household MCP memvalidasi + persist ke SQLite
+   ↓
+FARIA mengonfirmasi summary; dashboard merefleksikan update
 ```
 
 **Success Condition**
-- `<CONDITION>`
+- Alokasi hanya persisted setelah konfirmasi eksplisit, dan dashboard merefleksikan state yang terkonfirmasi.
 
 **Related Capabilities**
-- `CAP-...`
-- `CAP-...`
+- `CAP-ALLOC-001`, `CAP-CHAT-001`, `CAP-APPROVE-001`, `CAP-DASH-001`
+
+### J-02 — Record a Savings Contribution
+
+**Actor:** Spouse
+**Goal:** menambahkan uang ke savings goal yang sudah ada lewat chat
+
+```text
+Telegram: "Tambahkan 3 juta ke dana darurat"
+   ↓
+Hermes mengenali intent savings-contribution
+   ↓
+Household MCP: record_savings_contribution
+   ↓
+FARIA mengonfirmasi progress baru
+```
+
+**Success Condition**
+- Progress savings goal merefleksikan contribution baru.
+
+**Related Capabilities**
+- `CAP-SAVE-001`, `CAP-CHAT-001`
 
 ---
 
 ## 6. Product-Wide Rules
 
-Hanya aturan lintas-feature atau product-wide.
-
 | ID | Rule |
 |---|---|
-| PR-001 | `<PRODUCT-WIDE RULE>` |
-| PR-002 | `<PRODUCT-WIDE RULE>` |
-
-Rule yang hanya berlaku pada satu feature harus berada di Feature Spec.
+| PR-001 | Alokasi finansial yang diusulkan TIDAK BOLEH disimpan sebagai authoritative sebelum household mengonfirmasi secara eksplisit. |
+| PR-002 | FARIA TIDAK BOLEH secara otonom mentransfer uang, membayar bill, memindahkan savings, mengubah aturan zakat/sedekah, mengubah target finansial, atau menghapus riwayat finansial. |
+| PR-003 | FARIA HARUS menolak permintaan di luar scope household finance/operations. |
+| PR-004 | Hanya identitas Telegram pada allowlist eksplisit yang boleh berinteraksi dengan FARIA. |
+| PR-005 | LLM TIDAK BOLEH memiliki akses raw SQL atau shell tanpa batas; semua perubahan authoritative state melalui Household MCP tools. |
 
 ---
 
 ## 7. Roles and Permissions Overview
 
-Ini adalah product-level overview, bukan authoritative security implementation.
+| Capability / Action | Household Owner | Spouse |
+|---|---:|---:|
+| Mencatat income / membuat draft allocation | Yes | Yes |
+| Mengonfirmasi allocation | Yes | Yes |
+| Membuat savings goal / mencatat contribution | Yes | Yes |
+| Melihat dashboard | Yes | Yes |
 
-| Capability / Action | `<ROLE_A>` | `<ROLE_B>` | `<ROLE_C>` |
-|---|---:|---:|---:|
-| `<ACTION>` | Yes | No | Own only |
-
-Detailed authorization rule tetap berada di Feature Spec dan trusted backend/security boundary.
+Kedua role berbagi household context yang sama; V1 tidak memodelkan permission yang berbeda selain allowlist Telegram itu sendiri.
 
 ---
 
@@ -161,102 +295,63 @@ Detailed authorization rule tetap berada di Feature Spec dan trusted backend/sec
 
 ### Cross-Product Experience Expectations
 
-- `<EXPECTATION>`
-- `<EXPECTATION>`
+- Respons percakapan default dalam Bahasa Indonesia.
+- Dashboard menampilkan state saat ini tanpa mengharuskan user memahami arsitektur di baliknya.
 
 ### Required States
 
-Aplikasi harus menangani state yang relevan secara konsisten:
-
-- loading;
-- empty;
-- success;
-- validation error;
-- server/dependency error;
-- unauthorized/forbidden;
-- offline/degraded jika applicable.
+- loading/working;
+- empty (belum ada alokasi bulan ini);
+- success (terkonfirmasi);
+- validation error (nominal tidak valid);
+- pending confirmation;
+- unauthorized (Telegram user di luar allowlist).
 
 ### Responsive / Accessibility
 
-- `<REQUIREMENT>`
-- `<REQUIREMENT>`
-
-Detailed UI pattern/tokens berada di Design System.
+- Dashboard harus dapat digunakan di browser desktop dan mobile; tidak memerlukan native app untuk V1.
 
 ---
 
 ## 9. Notifications and User Communication
 
-Isi bila product mempunyai email, push, in-app notification, atau transactional communication.
-
-| Trigger | Audience | Channel | Purpose |
-|---|---|---|---|
-| `<TRIGGER>` | `<ACTOR>` | Email / Push / In-app | `<PURPOSE>` |
-
-Final copy boleh hidup di dedicated content source.
+Telegram sendiri adalah channel notifikasi untuk V1 — balasan dan reminder FARIA adalah transactional communication-nya; belum ada sistem email/push terpisah di V1.
 
 ---
 
 ## 10. Search, Filter, Sort, and Discovery
 
-Isi hanya bila relevan.
-
-### Search
-- `<EXPECTED PRODUCT BEHAVIOR>`
-
-### Filter
-- `<EXPECTED PRODUCT BEHAVIOR>`
-
-### Sort
-- `<EXPECTED PRODUCT BEHAVIOR>`
-
-### Discovery / Recommendation
-- `<EXPECTED PRODUCT BEHAVIOR OR N/A>`
-
-Query/index/search architecture tidak berada di PRD.
+N/A untuk V1 — dashboard menampilkan state saat ini secara langsung; belum diperlukan search/filter/discovery.
 
 ---
 
 ## 11. Analytics and Product Instrumentation
 
-**Success metric targets tidak didefinisikan ulang di sini.**
-
-Canonical metrics berada di:
-
-`./PRODUCT_BRIEF.md#11-success-metrics`
-
-PRD hanya memetakan event/instrumentation yang diperlukan untuk mengukur product behavior/outcome.
+Canonical metrics: `./PRODUCT_BRIEF.md#11-success-metrics`
 
 | Event | Trigger | Key Properties | Supports Metric / Question |
 |---|---|---|---|
-| `<EVENT_NAME>` | `<WHEN>` | `<PROPERTIES>` | `<METRIC / QUESTION>` |
-
-Jangan memasukkan sensitive data ke analytics tanpa kebutuhan dan review yang jelas.
+| `allocation_confirmed` | Household mengonfirmasi draft allocation | period, total amount | Monthly allocation completion rate |
+| `savings_contribution_recorded` | Contribution dicatat | goal, amount | Savings goals yang aktif dilacak |
 
 ---
 
 ## 12. Data and Privacy Expectations
 
-Product-level expectation:
-
-- `<WHAT USER DATA IS REQUIRED>`
-- `<WHAT USER CAN VIEW / EDIT / DELETE>`
-- `<RETENTION OR CONSENT EXPECTATION>`
-- `<DATA EXPORT / ACCOUNT DELETION EXPECTATION>`
-
-Physical data model berada di Data Model dan migrations/schema.
+- Data finansial household (income, allocation, savings, zakat/sedekah) diperlukan untuk menjalankan FARIA.
+- Detail penggunaan personal allowance secara eksplisit TIDAK dikumpulkan — hanya nominal yang dialokasikan.
+- Household memiliki dan dapat mengekspor/memeriksa data SQLite miliknya sendiri kapan pun (single-tenant, self-hosted).
+- Retention: indefinite selama household menggunakan FARIA; belum ada automatic deletion policy untuk V1.
 
 ---
 
 ## 13. Integrations
 
-Product-level dependency pada external systems.
-
 | Integration | Product Purpose | Critical? | Related Feature |
 |---|---|---:|---|
-| `<SERVICE>` | `<PURPOSE>` | Yes / No | `<FEATURE>` |
-
-Technical protocol, retry, timeout, auth, dan compatibility berada di contracts/architecture/standards.
+| Telegram Bot API | Antarmuka percakapan utama | Yes | CAP-CHAT-001 |
+| 9Router → OpenRouter → LLM | Reasoning/response generation agent | Yes | Semua capability percakapan |
+| Household MCP | Domain tool boundary yang terkontrol untuk authoritative state | Yes | CAP-ALLOC-001, CAP-SAVE-001, CAP-GIVE-001, CAP-BUDGET-001, CAP-ALLOW-001, CAP-ROUTINE-001 |
 
 ---
 
@@ -264,33 +359,28 @@ Technical protocol, retry, timeout, auth, dan compatibility berada di contracts/
 
 ### Required for Release
 
-- `CAP-...`
-- `CAP-...`
+- `CAP-ALLOC-001`, `CAP-CHAT-001`, `CAP-APPROVE-001`, `CAP-SCOPE-001`
 
 ### Can Be Deferred
 
-- `CAP-...`
+- `CAP-SAVE-001`, `CAP-GIVE-001`, `CAP-BUDGET-001`, `CAP-ALLOW-001`, `CAP-ROUTINE-001`, `CAP-DASH-001` (dashboard dapat dimulai read-only/minimal)
 
 ### Product Release Blockers
 
 Release belum product-complete jika:
 
-- `<BLOCKER CONDITION>`
-- `<BLOCKER CONDITION>`
-
-Technical release gate berada di Release Checklist dan CI/CD standard.
+- alokasi finansial dapat disimpan sebagai authoritative tanpa konfirmasi eksplisit;
+- FARIA beraksi di luar household domain tanpa menolak.
 
 ---
 
 ## 15. Delivery Dependencies
 
-Bagian ini hanya untuk dependency yang menghambat delivery capability saat ini.
-
-Product/business assumptions tetap authoritative di Product Brief.
-
 | Dependency | Needed For | Risk | Status |
 |---|---|---|---|
-| `<DEPENDENCY>` | `<CAPABILITY>` | Low / Medium / High | Open / Ready |
+| Implementasi Household MCP server | CAP-ALLOC-001 dan semua capability yang mengubah state | High | Open |
+| Konfigurasi allowlist Telegram | CAP-CHAT-001 | Medium | Open |
+| Akses 9Router/OpenRouter | Semua capability percakapan | Medium | Open |
 
 ---
 
@@ -298,12 +388,9 @@ Product/business assumptions tetap authoritative di Product Brief.
 
 | ID | Decision / Question | Owner | Blocking? | Target |
 |---|---|---|---:|---|
-| PD-01 | `<QUESTION>` | `<OWNER>` | Yes / No | `<MILESTONE>` |
-
-Jika decision:
-- mengubah architecture → buat/update ADR;
-- mengubah detailed feature behavior → update Feature Spec;
-- mengubah product purpose/metric/assumption → update Product Brief.
+| PD-01 | Formula/aturan alokasi zakat penghasilan yang tepat | Household | Yes | Sebelum alokasi zakat pertama dikonfirmasi |
+| PD-02 | Aturan/nominal sedekah bulanan yang berulang | Household | Yes | Sebelum alokasi sedekah pertama dikonfirmasi |
+| PD-03 | Hosting provider final | Household | No | Sebelum deployment |
 
 ---
 
@@ -311,9 +398,7 @@ Jika decision:
 
 | Feature | Spec | Status | Related Capability |
 |---|---|---|---|
-| `<FEATURE>` | `../01_features/<feature>.md` | Draft / Locked | `CAP-...` |
-
-PRD tidak boleh menduplikasi seluruh Functional Requirements dari Feature Specs.
+| Monthly Allocation | `../01_features/monthly-allocation.md` | Draft | `CAP-ALLOC-001` |
 
 ---
 
@@ -321,12 +406,12 @@ PRD tidak boleh menduplikasi seluruh Functional Requirements dari Feature Specs.
 
 Scope fase ini dianggap terpenuhi ketika:
 
-- [ ] seluruh P0 capabilities tersedia;
-- [ ] primary user journeys dapat diselesaikan;
-- [ ] relevant feature Acceptance Criteria terpenuhi;
-- [ ] instrumentation yang diperlukan untuk canonical product metrics tersedia;
+- [ ] `CAP-ALLOC-001`, `CAP-CHAT-001`, `CAP-APPROVE-001`, `CAP-SCOPE-001` tersedia;
+- [ ] journey J-01 Monthly Allocation dapat diselesaikan end to end;
+- [ ] Acceptance Criteria pada `monthly-allocation.md` terpenuhi;
+- [ ] instrumentation `allocation_confirmed` tersedia;
 - [ ] tidak ada unresolved product blocker;
-- [ ] out-of-scope behavior tidak masuk tanpa keputusan eksplisit.
+- [ ] behavior out-of-scope (transaction tracking, autonomous money movement) tidak masuk tanpa keputusan eksplisit.
 
 Engineering Definition of Done berada di `AGENTS.md` dan engineering standards.
 
@@ -335,11 +420,8 @@ Engineering Definition of Done berada di `AGENTS.md` dan engineering standards.
 ## 19. Related Documents
 
 - Product Brief: `./PRODUCT_BRIEF.md`
-- Roadmap: `./ROADMAP.md`
 - Feature Specs: `../01_features/`
-- UX Flows: `../03_design/UX_FLOWS.md`
 - System Architecture: `../02_architecture/SYSTEM_ARCHITECTURE.md`
-- NFR: `../02_architecture/NON_FUNCTIONAL_REQUIREMENTS.md`
 - Data Model: `../02_architecture/DATA_MODEL.md`
 
 ---
@@ -348,4 +430,4 @@ Engineering Definition of Done berada di `AGENTS.md` dan engineering standards.
 
 | Version | Date | Change | Author |
 |---|---|---|---|
-| 0.1 | `<YYYY-MM-DD>` | Initial draft | `<AUTHOR>` |
+| 0.1 | `2026-09-11` | Initial draft | sipratama |
