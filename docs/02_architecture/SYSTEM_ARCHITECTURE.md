@@ -470,6 +470,11 @@ No ADRs exist yet. The technical direction in this document (Hermes, 9Router, Op
 
 - None — greenfield project.
 
+### Runtime Constraints Discovered During RF-01
+
+- No publicly published Hermes Agent Docker image exists; it must be built locally from the upstream source (see `docs/05_operations/DEVELOPER_SETUP.md`).
+- Current Hermes documentation exposes no config key that fully disables its terminal/shell tool — only approval gating (`approvals.mode`) and backend isolation (`terminal.backend: docker`) are documented. This is mitigated, not resolved (see AQ-07 below and `docs/05_operations/CONFIGURATION.md`).
+
 ---
 
 ## 22. Known Architecture Risks
@@ -491,6 +496,7 @@ No ADRs exist yet. The technical direction in this document (Hermes, 9Router, Op
 | AQ-04 | Encrypted backup destination and mechanism | Before production use | Household |
 | AQ-05 | Dashboard framework specifics beyond "React/Next.js" (state management, exact API style) | Before dashboard implementation | Implementation |
 | AQ-06 | Whether personas ever become independent agents | Only if real requirements justify it | Household / Implementation |
+| AQ-07 | Whether Hermes' terminal/shell tool can be fully disabled (not just approval-gated) before household users get real access | Before Telegram gateway is used routinely by non-technical household members | Implementation |
 
 When resolved, create an ADR if the decision is architecturally material.
 

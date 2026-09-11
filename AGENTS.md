@@ -22,7 +22,7 @@ Before non-trivial work, identify: what behavior is requested; which document ow
 | Engineering rules | `docs/standards/` |
 | New-project / re-initialization workflow | `docs/PROJECT_INITIALIZATION.md` |
 
-Several conditional documents (roadmap, NFR, UX flows, design system, test strategy, threat model, developer setup, configuration, deployment, runbook, risks, release checklist, known limitations) currently exist but are marked **"Not activated for V1"** in place. Read each file's own activation condition before filling it in — do not populate it with speculative content preemptively.
+Several conditional documents (roadmap, NFR, UX flows, design system, test strategy, threat model, deployment, runbook, risks, release checklist, known limitations) currently exist but are marked **"Not activated for V1"** in place. Read each file's own activation condition before filling it in — do not populate it with speculative content preemptively. `docs/05_operations/DEVELOPER_SETUP.md` and `docs/05_operations/CONFIGURATION.md` were activated in RF-01 (Runtime Foundation) and are now authoritative for local Hermes/9Router/Telegram runtime setup.
 
 ## 3. Read Selectively
 

@@ -50,6 +50,12 @@ build/
 xcuserdata/
 
 # ==========================================
+# FARIA runtime (RF-01) — local Hermes state, never commit real secrets
+# ==========================================
+infra/hermes/config.yaml
+infra/hermes/data/
+
+# ==========================================
 # Build Artifacts & Logs (General)
 # ==========================================
 *.log

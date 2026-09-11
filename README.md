@@ -37,7 +37,7 @@ One Hermes agent runtime orchestrates four logical personas (Finance, Giving, Ho
 | `AGENTS.md` | Rules for AI coding agents working in this repo |
 | `docs/standards/` | Reusable engineering standards |
 
-Several conditional documents (roadmap, NFR, UX flows, design system, test strategy, threat model, developer setup, configuration, deployment, runbook, risks, release checklist, known limitations) are present but marked "Not activated for V1" — each will be filled in once its own stated activation condition is met.
+Several conditional documents (roadmap, NFR, UX flows, design system, test strategy, threat model, deployment, runbook, risks, release checklist, known limitations) are present but marked "Not activated for V1" — each will be filled in once its own stated activation condition is met. Developer Setup and Configuration were activated once a real runtime (RF-01) existed to describe.
 
 ## Technology Direction (V1)
 
@@ -45,4 +45,4 @@ Hermes (agent runtime) · 9Router (model gateway) · OpenRouter (model provider)
 
 ## Setup
 
-Not applicable yet — no source code exists. Setup instructions will be added to `docs/05_operations/DEVELOPER_SETUP.md` once implementation begins.
+RF-01 (Runtime Foundation) established the minimum runtime path: Telegram → Hermes Gateway → 9Router → model. See `docs/05_operations/DEVELOPER_SETUP.md` to build and run it locally, and `scripts/runtime/README.md` to verify it. Household MCP, SQLite, Monthly Allocation, and the dashboard app are not part of this yet.
