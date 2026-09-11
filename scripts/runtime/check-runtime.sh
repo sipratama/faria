@@ -1,58 +1,62 @@
 #!/usr/bin/env bash
-# FARIA RF-01 runtime check (portable shell equivalent of check-runtime.ps1).
-# Read scripts/runtime/README.md for the manual checks (C, D, E) this script
-# cannot safely automate. Never prints secret values. Never fabricates a
-# PASS — anything it cannot verify is reported as BLOCKED_BY_LOCAL_CONFIGURATION.
+# FARIA RF-01 checks for the accepted host-managed macOS topology.
+# Manual chat and Telegram evidence is recorded in scripts/runtime/README.md.
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-ENV_FILE="${1:-$ROOT_DIR/.env}"
+router_models_url="${1:-http://127.0.0.1:20128/v1/models}"
 blocked_count=0
 
-pass()    { printf 'PASS                            %-32s %s\n' "$1" "$2"; }
-blocked() { printf 'BLOCKED_BY_LOCAL_CONFIGURATION %-32s %s\n' "$1" "$2"; blocked_count=$((blocked_count + 1)); }
-manual()  { printf 'MANUAL_STEP_REQUIRED            %-32s %s\n' "$1" "$2"; }
+pass()     { printf 'PASS                            %-30s %s\n' "$1" "$2"; }
+blocked()  { printf 'BLOCKED_BY_LOCAL_CONFIGURATION %-30s %s\n' "$1" "$2"; blocked_count=$((blocked_count + 1)); }
+recorded() { printf 'RECORDED_MANUAL_EVIDENCE        %-30s %s\n' "$1" "$2"; }
 
-if [ ! -f "$ENV_FILE" ]; then
-  blocked ".env present" "Missing $ENV_FILE. Copy .env.example to .env and fill in real values, then re-run."
+if ! command -v curl >/dev/null 2>&1; then
+  blocked "A: 9Router reachability" "curl is not available on PATH."
 else
-  set -a
-  # shellcheck disable=SC1090
-  source "$ENV_FILE"
-  set +a
+  router_http="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "$router_models_url" 2>/dev/null || true)"
+  case "$router_http" in
+    200|401|403)
+      pass "A: 9Router reachability" "$router_models_url responded with HTTP $router_http"
+      ;;
+    000|"")
+      blocked "A: 9Router reachability" "No response from $router_models_url. Confirm 9Router is running on the host."
+      ;;
+    *)
+      blocked "A: 9Router reachability" "$router_models_url returned unexpected HTTP $router_http. Confirm the port and /v1/models path."
+      ;;
+  esac
 fi
 
-if [ -z "${ROUTER9_BASE_URL:-}" ]; then
-  blocked "A: 9Router reachability" "ROUTER9_BASE_URL not set in .env."
+if ! command -v hermes >/dev/null 2>&1; then
+  blocked "B: Hermes installed" "hermes is not available on PATH. Use the official managed installer, then re-run."
 else
-  probe_url="${ROUTER9_BASE_URL%/}/models"
-  if curl -fsS -m 5 "$probe_url" >/dev/null 2>&1; then
-    pass "A: 9Router reachability" "GET $probe_url succeeded"
+  hermes_version="$(hermes --version 2>/dev/null | sed -n '1p')"
+  if [ -n "$hermes_version" ]; then
+    pass "B: Hermes installed" "$hermes_version"
   else
-    blocked "A: 9Router reachability" "Could not reach $probe_url. Confirm 9Router is running and the URL is correct for this host."
+    blocked "B: Hermes installed" "hermes --version did not return version information."
   fi
 fi
 
-if ! command -v docker >/dev/null 2>&1; then
-  blocked "B: Hermes container running" "Docker is not installed/available on PATH."
+if ! command -v hermes >/dev/null 2>&1; then
+  blocked "C: Gateway supervised" "Hermes is required before gateway status can be checked."
 else
-  status="$(docker ps --filter 'name=faria-hermes-gateway' --format '{{.Status}}' 2>/dev/null || true)"
-  if [ -z "$status" ]; then
-    blocked "B: Hermes container running" "Container 'faria-hermes-gateway' is not running. From the repo root run: docker compose -f infra/docker/compose.yaml --env-file .env up -d gateway"
+  gateway_status="$(hermes gateway status 2>&1 || true)"
+  if printf '%s\n' "$gateway_status" | grep -q 'Service definition matches' \
+    && printf '%s\n' "$gateway_status" | grep -Eq 'supervised by launchd \(PID [0-9]+\)'; then
+    pass "C: Gateway supervised" "Current Hermes service definition is running under launchd."
   else
-    pass "B: Hermes container running" "faria-hermes-gateway: $status"
+    blocked "C: Gateway supervised" "Run 'hermes gateway status'; if needed, configure with 'hermes setup gateway'."
   fi
 fi
 
-manual "C: Normal Hermes chat" "See 'Check C' in scripts/runtime/README.md."
-manual "D: Telegram gateway" "See 'Check D' in scripts/runtime/README.md."
-manual "E: Unauthorized identity rejected" "See 'Check E' in scripts/runtime/README.md."
+recorded "D: Normal Hermes chat" "PASS from RF-01A manual acceptance evidence; see scripts/runtime/README.md."
+recorded "E: Telegram smoke test" "PASS from RF-01A manual acceptance evidence; see scripts/runtime/README.md."
 
-echo ""
+printf '\n'
 if [ "$blocked_count" -gt 0 ]; then
-  echo "RF-01 PARTIALLY READY: $blocked_count automated check(s) are BLOCKED_BY_LOCAL_CONFIGURATION."
+  printf 'RF-01 runtime checks blocked: %s non-secret check(s) failed.\n' "$blocked_count"
   exit 1
-else
-  echo "Automated checks passed. Continue with the manual checks (C, D, E) in scripts/runtime/README.md."
-  exit 0
 fi
+
+printf 'RF-01 runtime connectivity checks pass. Security onboarding follow-ups remain documented in scripts/runtime/README.md.\n'

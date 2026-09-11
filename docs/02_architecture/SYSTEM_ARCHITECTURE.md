@@ -12,9 +12,9 @@
 |---|---|
 | Project | FARIA |
 | Status | Draft |
-| Version | `0.1` |
+| Version | `0.2` |
 | Architecture Owner | sipratama |
-| Last Updated | `2026-09-11` |
+| Last Updated | `2026-09-12` |
 
 ---
 
@@ -68,15 +68,18 @@ The architecture is not currently optimized for:
 +---------+---------+
           | Telegram private group (allowlisted)
           v
-+-------------------+        +------------------+
-|   Hermes Runtime  |------->|     9Router      |
-| (skills + cron)   |        +--------+---------+
-+---------+---------+                 |
-          |                            v
-          |                  +------------------+
-          |                  |   OpenRouter     |
-          |                  | (household-main) |
-          |                  +------------------+
++-------------------+
+|   Hermes Runtime  |
+| (skills + cron)   |
++---------+---------+
+          |
+          +--------> 9Router
+          |            |
+          |            v
+          |          faria-household-main
+          |            |
+          |            v
+          |          OpenRouter
           v
 +-------------------+
 |  Household MCP    |
@@ -84,14 +87,14 @@ The architecture is not currently optimized for:
           v
 +-------------------+        +------------------+
 |      SQLite       |------->|  Encrypted       |
-| (authoritative)    |        |  Backup (TBD)   |
+| (authoritative)   |        |  Backup (TBD)   |
 +-------------------+        +------------------+
           ^
           | read via application/API boundary
 +-------------------+
-|     Dashboard      |
-| (Agent Control     |
-|  Center)           |
+|     Dashboard     |
+| (Agent Control    |
+|  Center)          |
 +-------------------+
 ```
 
@@ -112,32 +115,46 @@ The architecture is not currently optimized for:
 
 ---
 
-## 4. Container / Runtime View
+## 4. Runtime View
 
-| Component | Responsibility | Technology | Deployment Unit |
+### Accepted Local Development Runtime (RF-01)
+
+| Component | Responsibility | Technology | Local Execution Unit |
 |---|---|---|---|
-| Hermes Runtime | Conversational orchestration, skills/personas, cron/routines | Hermes Agent | Container |
-| Household MCP | Constrained domain tool server for authoritative state | Custom MCP server | Container |
-| Dashboard | Agent Control Center web UI | React / Next.js | Container |
-| SQLite | Authoritative structured data | SQLite file | Volume on host |
-
-### Deployment Relationships
+| Hermes Runtime | Conversational orchestration and model/tool invocation | Hermes Agent managed install | macOS host process |
+| Hermes Gateway | Telegram connectivity | Hermes Gateway | macOS launchd service |
+| 9Router | Logical model routing and physical model fallback | 9Router | Local Docker/OrbStack container publishing host port `20128` |
+| Hermes terminal sandbox | Isolated tool/terminal execution with egress firewall | Docker | Ephemeral sandbox container(s) managed by Hermes |
 
 ```text
 Telegram
    |
    v
-Hermes Runtime -----> 9Router -----> OpenRouter
+Hermes Gateway (launchd)
    |
    v
-Household MCP
+Hermes Runtime (managed macOS install)
    |
    v
-SQLite (+ encrypted backup)
-   ^
-   | API boundary
-Dashboard
+9Router (Docker/OrbStack :20128)
+   |
+   v
+faria-household-main ---> OpenRouter ---> selected primary/fallback model
+
+Hermes Runtime ---> Docker terminal sandbox ---> egress firewall
 ```
+
+Docker isolates Hermes terminal/tool execution and runs 9Router; it does not host Hermes itself in the accepted local development topology.
+
+### Planned V1 Components
+
+| Component | Responsibility | Technology | Production Deployment Unit |
+|---|---|---|---|
+| Household MCP | Constrained domain tool server for authoritative state | Custom MCP server | TBD before implementation/deployment |
+| Dashboard | Agent Control Center web UI | React / Next.js | TBD before deployment |
+| SQLite | Authoritative structured data | SQLite file | Host/volume and backup mechanism TBD before production use |
+
+The logical relationships among Hermes, Household MCP, SQLite, and the dashboard remain as documented throughout this architecture. RF-01A does not choose production packaging for them.
 
 ---
 
@@ -324,9 +341,10 @@ SQLite / Backup
 
 ### Security Invariants
 
-- secrets (Telegram bot token, OpenRouter/9Router keys) are not committed to source and come from runtime environment configuration;
+- secrets (Telegram bot token, OpenRouter/9Router keys) are not committed to source and remain in Hermes-managed or 9Router-managed runtime configuration outside this repository;
 - only allowlisted Telegram identities are processed;
-- the LLM never receives raw SQL or shell access — only Household MCP's constrained tools;
+- the LLM never receives raw SQL access to authoritative household state; authoritative reads/writes use only Household MCP's constrained tools;
+- Hermes terminal execution uses a Docker sandbox with the egress firewall enabled in the accepted local topology; its broader general-purpose tool/skill surface remains a security-hardening concern before routine shared-household use;
 - material financial state changes require explicit human confirmation before persistence;
 - 9Router and Household MCP are not publicly exposed beyond what Hermes/dashboard need;
 - privileged/state-changing Household MCP calls should be auditable (who/when/what).
@@ -391,30 +409,17 @@ The dashboard's persona health signal (Idle/Working/Scheduled/Error) is the prim
 
 No separate staging environment is planned yet given single-household scale.
 
-### Runtime Platform
+### Local Development Platform
 
-Docker containers on an always-on Linux host.
+The accepted RF-01 development environment is macOS: Hermes is installed through its official managed installer, the gateway is supervised by launchd, 9Router runs in Docker/OrbStack, and Hermes uses Docker as its terminal sandbox backend with the egress firewall enabled.
 
-### Deployment Diagram
+### Future Production Platform
 
-```text
-Internet
-   |
-   v
-Always-on Linux host (Docker)
-   |
-   +------> Hermes Runtime container
-   |
-   +------> Household MCP container
-   |
-   +------> Dashboard container
-   |
-   +------> SQLite volume ---> Encrypted backup (off-host, TBD)
-```
+Production hosting and packaging remain open. RF-01A does not choose XCodePod versus a paid VPS, containerized versus host-managed Hermes, Docker Compose, systemd, reverse proxy, domain, TLS termination, or backup provider. Those decisions belong to a later deployment batch.
 
 ### Configuration
 
-Runtime configuration and secrets come from environment/runtime secret configuration, never hard-coded values.
+For the accepted local runtime, Hermes configuration and credentials live under its managed `~/.hermes` runtime state, while 9Router owns its OpenRouter credential and physical model fallback list. FARIA repository configuration will be introduced only when an implemented FARIA component consumes it. Secrets are never hard-coded or committed.
 
 ---
 
@@ -452,7 +457,7 @@ Finance/Giving/Home Ops/Planner personas remain logical skills within one Hermes
 
 ## 20. Architecture Decision Records
 
-No ADRs exist yet. The technical direction in this document (Hermes, 9Router, OpenRouter, Household MCP, SQLite, Docker) reflects an accepted product decision provided during initialization (see Product Brief, Section 9/Fixed Technical Direction) rather than a locally deliberated architecture trade-off. It is recorded here as the current baseline rather than as a formal ADR, consistent with avoiding unnecessary ADRs during initialization.
+No ADRs exist yet. The technical direction in this document (Hermes, 9Router, OpenRouter, Household MCP, SQLite, and isolated tool execution) reflects an accepted product decision provided during initialization (see Product Brief, Section 9/Fixed Technical Direction) rather than a locally deliberated architecture trade-off. RF-01A aligns the local runtime description with observed operation; it does not make a new material architecture decision.
 
 ---
 
@@ -464,7 +469,8 @@ No ADRs exist yet. The technical direction in this document (Hermes, 9Router, Op
 
 ### Operational Constraints
 
-- Single always-on host; hosting provider not yet finalized.
+- The proven development topology is macOS-specific; production hosting and process supervision are not yet finalized.
+- Only one household member is currently configured and tested in the Telegram allowlist. Second-member onboarding and testing remain prerequisites before shared household use.
 
 ### Legacy / Integration Constraints
 
@@ -472,8 +478,9 @@ No ADRs exist yet. The technical direction in this document (Hermes, 9Router, Op
 
 ### Runtime Constraints Discovered During RF-01
 
-- No publicly published Hermes Agent Docker image exists; it must be built locally from the upstream source (see `docs/05_operations/DEVELOPER_SETUP.md`).
-- Current Hermes documentation exposes no config key that fully disables its terminal/shell tool — only approval gating (`approvals.mode`) and backend isolation (`terminal.backend: docker`) are documented. This is mitigated, not resolved (see AQ-07 below and `docs/05_operations/CONFIGURATION.md`).
+- The accepted Hermes topology is a managed macOS installation with a launchd-supervised gateway, not a FARIA-owned application container.
+- Hermes exposes general-purpose tools and skills beyond FARIA's intended household scope. Docker terminal isolation and the egress firewall reduce risk but do not replace a future FARIA-specific tool/skill restriction review (see AQ-07 and `docs/05_operations/CONFIGURATION.md`).
+- Rejection of a non-allowlisted Telegram identity has not yet been tested; this is an operational security follow-up, not a claim of acceptance.
 
 ---
 
@@ -482,7 +489,8 @@ No ADRs exist yet. The technical direction in this document (Hermes, 9Router, Op
 | Risk | Impact | Mitigation |
 |---|---|---|
 | Single SQLite file/host is a single point of failure | Household financial data loss if the host fails without backup | Encrypted external backup (destination TBD) before production use |
-| Model/provider behind the `household-main` alias may change | Inconsistent response quality/latency | Keep Hermes decoupled from a specific physical model via the 9Router alias |
+| Model/provider behind the `faria-household-main` combo may change | Inconsistent response quality/latency | Keep Hermes decoupled from a specific physical model through the 9Router-owned combo |
+| Hermes exposes tools/skills beyond FARIA's intended household scope | A household request could reach unnecessary general-purpose capability | Keep terminal execution sandboxed with egress filtering and define tighter FARIA tool/skill restrictions in a later hardening batch |
 
 ---
 
@@ -490,13 +498,13 @@ No ADRs exist yet. The technical direction in this document (Hermes, 9Router, Op
 
 | ID | Question | Decision Needed By | Owner |
 |---|---|---|---|
-| AQ-01 | Final hosting provider (XCodePod.Cloud vs. paid VPS) | Before deployment | Household |
+| AQ-01 | Final production hosting and runtime packaging (including XCodePod.Cloud vs. paid VPS and host-managed vs. containerized processes) | Before deployment | Household |
 | AQ-02 | Exact Household MCP tool contract shapes | Before Household MCP implementation | Implementation |
 | AQ-03 | Migration/schema tooling for SQLite | Before first schema is created | Implementation |
 | AQ-04 | Encrypted backup destination and mechanism | Before production use | Household |
 | AQ-05 | Dashboard framework specifics beyond "React/Next.js" (state management, exact API style) | Before dashboard implementation | Implementation |
 | AQ-06 | Whether personas ever become independent agents | Only if real requirements justify it | Household / Implementation |
-| AQ-07 | Whether Hermes' terminal/shell tool can be fully disabled (not just approval-gated) before household users get real access | Before Telegram gateway is used routinely by non-technical household members | Implementation |
+| AQ-07 | How Hermes tools and skills will be restricted to FARIA's intended household scope beyond Docker terminal isolation and egress filtering | Before routine shared-household use | Implementation |
 
 When resolved, create an ADR if the decision is architecturally material.
 
@@ -524,4 +532,5 @@ Do not update this document for routine internal refactoring that preserves the 
 
 | Version | Date | Change | Author |
 |---|---|---|---|
+| 0.2 | `2026-09-12` | Aligned local runtime topology and RF-01 acceptance with the verified managed Hermes/launchd/9Router setup | sipratama |
 | 0.1 | `2026-09-11` | Initial draft | sipratama |

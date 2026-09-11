@@ -1,54 +1,117 @@
 # Developer Setup — FARIA
 
-> **Scope:** RF-01 (Runtime Foundation) only — the Hermes → 9Router → model path and the Telegram → Hermes Gateway path. Household MCP, SQLite business schema, Monthly Allocation, and the dashboard app are not part of this setup yet (see `AGENTS.md`).
+> **Scope:** RF-01 runtime connectivity only. This is the accepted macOS development path; it does not install Household MCP, SQLite business persistence, Monthly Allocation, or the dashboard.
 
 ## 1. Prerequisites
 
-| Tool | Notes |
+- macOS with Docker available through OrbStack or an equivalent Docker runtime;
+- a local 9Router instance publishing host port `20128`;
+- the official Hermes managed installer;
+- a Telegram BotFather token and explicit household-user allowlist for gateway setup.
+
+Keep all API credentials, bot tokens, and Telegram user IDs outside this repository.
+
+## 2. Install Hermes
+
+Use the official Hermes managed installer/setup flow rather than building a FARIA-owned container image. Verify the resulting installation:
+
+```bash
+hermes --version
+```
+
+The RF-01 acceptance environment used Hermes Agent v0.21.2, installed as `~/.local/bin/hermes` with its managed source under `~/.hermes/hermes-agent`. These paths are observations from the accepted environment, not repository-managed installation targets.
+
+## 3. Connect Hermes to 9Router
+
+Ensure 9Router is running and reachable from the macOS host at:
+
+```text
+http://127.0.0.1:20128
+```
+
+Run:
+
+```bash
+hermes model
+```
+
+Configure:
+
+| Setting | Value |
 |---|---|
-| Docker Desktop (Windows/macOS) or Docker Engine (Linux) | Runs the Hermes container |
-| A running 9Router instance, reachable from your host | RF-01 does not install or configure 9Router itself |
-| A Telegram bot token from [@BotFather](https://t.me/BotFather) | Needed only for the Telegram checks |
-| The numeric Telegram user IDs of the two allowlisted household members | See `docs/05_operations/CONFIGURATION.md` |
+| Provider type | Custom OpenAI-compatible endpoint |
+| API base URL | `http://127.0.0.1:20128/v1` |
+| Compatibility mode | Auto-detect |
+| Logical model | `faria-household-main` |
+| Display name | `FARIA Household` |
 
-## 2. One-Time: Build the Hermes Image
+9Router must expose the `faria-household-main` logical combo. Its OpenRouter credentials and physical primary/fallback models remain 9Router-owned runtime configuration. Hermes stores the custom endpoint credential outside this repository.
 
-No public prebuilt Hermes Agent image exists (verified against official docs, 2026-09-11). Build one locally, **outside this repository**:
+## 4. Isolate Terminal Execution
 
-```bash
-git clone https://github.com/NousResearch/hermes-agent /path/outside/faria
-cd /path/outside/faria
-docker build -t hermes-agent:local .
-```
+During Hermes setup, select Docker as the terminal backend and enable the egress firewall. Docker isolates Hermes tool/terminal execution; Hermes itself remains a managed macOS process in this topology.
 
-## 3. Configure
+## 5. Verify Normal Chat
 
-1. Copy `.env.example` to `.env` in the repository root and fill in real values. Never commit `.env`.
-2. Use `infra/hermes/config.example.yaml` as the reference for `config.yaml` — it lives inside the `hermes_data` Docker volume (`/opt/data/config.yaml`), not in this repository. On first run Hermes creates its own defaults there; edit that file to match the example (model/provider, approvals, terminal isolation, website blocklist).
-
-## 4. Run
-
-From the repository root:
+Start Hermes from the host:
 
 ```bash
-docker compose -f infra/docker/compose.yaml --env-file .env up -d gateway
+hermes
 ```
 
-## 5. Verify
+Send:
 
-```powershell
-scripts\runtime\check-runtime.ps1
+```text
+Balas hanya dengan: FARIA runtime connected
 ```
 
-or
+Expected response:
+
+```text
+FARIA runtime connected
+```
+
+This is connectivity evidence only; it is not a performance, reliability, or model-quality benchmark.
+
+## 6. Configure Telegram
+
+After normal chat succeeds, run:
+
+```bash
+hermes setup gateway
+```
+
+Use manual setup, store the BotFather token in Hermes-managed configuration, and configure only explicit household user IDs. Then verify:
+
+```bash
+hermes gateway status
+```
+
+On the accepted macOS topology, the gateway is supervised by launchd through `~/Library/LaunchAgents/ai.hermes.gateway.plist`. PIDs are runtime-specific and are not configuration.
+
+From an allowlisted account, send:
+
+```text
+Balas hanya dengan: FARIA Telegram connected
+```
+
+Expected response:
+
+```text
+FARIA Telegram connected
+```
+
+Only one household member has currently been configured and tested. Second household member onboarding remains an operational prerequisite before shared household use.
+
+## 7. Repeat Non-Secret Checks
 
 ```bash
 scripts/runtime/check-runtime.sh
 ```
 
-Then follow the manual checks (normal chat, Telegram, unauthorized identity) in `scripts/runtime/README.md`.
+See `scripts/runtime/README.md` for the recorded manual acceptance evidence and the still-unverified unauthorized-identity rejection check.
 
-## 6. Related Documents
+## 8. Related Documents
 
 - `docs/05_operations/CONFIGURATION.md`
 - `scripts/runtime/README.md`

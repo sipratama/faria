@@ -4,7 +4,7 @@ FARIA (FArah RIzkia Ananda) is a private, single-household **AI Household Operat
 
 ## Status
 
-Documentation-initialized personal MVP. No implementation exists yet. This repository currently contains only the product/architecture baseline needed to start building the first vertical slice.
+Documentation-initialized personal MVP. RF-01 runtime connectivity is proven with a managed Hermes installation on macOS, a launchd-supervised Telegram gateway, and 9Router running locally through Docker/OrbStack. FARIA application code, Household MCP, business persistence, and product features have not been implemented yet.
 
 ## What FARIA Does (V1)
 
@@ -19,7 +19,7 @@ FARIA manages **allocations and goals, not transactions** — it deliberately do
 
 ## Architecture Summary
 
-One Hermes agent runtime orchestrates four logical personas (Finance, Giving, Home Ops, Planner) as skills — not independent agents — routed through 9Router to OpenRouter for model access. Authoritative household state lives in SQLite behind a constrained Household MCP tool boundary; the LLM never gets raw SQL or shell access. A React/Next.js dashboard reads state through an application/API boundary. See `docs/02_architecture/SYSTEM_ARCHITECTURE.md` for the full picture.
+One Hermes agent runtime orchestrates four logical personas (Finance, Giving, Home Ops, Planner) as skills — not independent agents — routed through 9Router to OpenRouter for model access. Authoritative household state lives in SQLite behind a constrained Household MCP tool boundary, with no raw SQL access for the LLM. Hermes terminal execution is isolated in Docker; tighter restriction of its broader tools and skills remains a security follow-up. A React/Next.js dashboard reads state through an application/API boundary. See `docs/02_architecture/SYSTEM_ARCHITECTURE.md` for the full picture.
 
 ## First Vertical Slice
 
@@ -41,8 +41,8 @@ Several conditional documents (roadmap, NFR, UX flows, design system, test strat
 
 ## Technology Direction (V1)
 
-Hermes (agent runtime) · 9Router (model gateway) · OpenRouter (model provider) · custom Household MCP server · SQLite · React/Next.js dashboard · Docker on an always-on host. See System Architecture for rationale and open decisions (hosting provider, backup destination).
+Hermes (agent runtime) · 9Router (model gateway) · OpenRouter (model provider) · custom Household MCP server · SQLite · React/Next.js dashboard. The accepted local development topology uses a managed Hermes install on macOS, launchd for the gateway, 9Router in Docker/OrbStack, and Docker as Hermes' terminal sandbox. Production packaging and hosting remain open decisions.
 
 ## Setup
 
-RF-01 (Runtime Foundation) established the minimum runtime path: Telegram → Hermes Gateway → 9Router → model. See `docs/05_operations/DEVELOPER_SETUP.md` to build and run it locally, and `scripts/runtime/README.md` to verify it. Household MCP, SQLite, Monthly Allocation, and the dashboard app are not part of this yet.
+RF-01 (Runtime Foundation) established the minimum runtime path: Telegram → Hermes Gateway → 9Router → model. See `docs/05_operations/DEVELOPER_SETUP.md` to configure the managed local installation and `scripts/runtime/README.md` for acceptance evidence and repeatable checks. Household MCP, SQLite, Monthly Allocation, and the dashboard app are not part of this yet.

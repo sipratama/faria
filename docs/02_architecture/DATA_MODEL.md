@@ -12,9 +12,9 @@
 |---|---|
 | Project | FARIA |
 | Status | Draft |
-| Version | `0.1` |
+| Version | `0.2` |
 | Owner | sipratama |
-| Last Updated | `2026-09-11` |
+| Last Updated | `2026-09-12` |
 
 ---
 
@@ -360,7 +360,7 @@ Internal identifier.
 | status | Idle / Working / Scheduled / Error | Yes | No |
 | task_description | Human-readable description of the activity | Yes | No |
 | occurred_at | Timestamp | Yes | No |
-| model_alias | Logical model alias used (e.g. `household-main`) | No | No |
+| model_alias | Logical model alias used (e.g. `faria-household-main`) | No | No |
 
 **Relationships**
 - Belongs to one Household.
@@ -574,4 +574,5 @@ Material persistence decisions should become ADRs when resolved.
 
 | Version | Date | Change | Author |
 |---|---|---|---|
+| 0.2 | `2026-09-12` | Aligned the AgentActivity model alias example with the verified 9Router combo | sipratama |
 | 0.1 | `2026-09-11` | Initial draft | sipratama |
