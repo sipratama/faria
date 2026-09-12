@@ -309,6 +309,8 @@ Telegram user
   ↓
 Allowlist check (Hermes)
   ↓
+Local runtime member mapping for authorized Telegram DMs
+  ↓
 Hermes skill processing
   ↓
 Household MCP constrained tool boundary
@@ -344,6 +346,7 @@ SQLite / Backup
 
 - secrets (Telegram bot token, OpenRouter/9Router keys) are not committed to source and remain in Hermes-managed or 9Router-managed runtime configuration outside this repository;
 - only allowlisted Telegram identities are processed;
+- household display aliases are personalization only: current-speaker context is injected from a local Telegram DM mapping after authorization, and message text, Telegram display names, or usernames cannot override it;
 - the LLM never receives raw SQL access to authoritative household state; authoritative reads/writes use only Household MCP's constrained tools;
 - the household Telegram surface exposes only the repo-owned Finance skill (plus Hermes' non-disableable operating skill) and the four allowlisted `faria-household` MCP tools; terminal, file, browser, web, code execution, delegation, and computer-use toolsets remain unavailable there, while the developer CLI is configured separately;
 - material financial state changes require explicit human confirmation before becoming authoritative; Household MCP enforces that only its confirm transition can make a draft authoritative, while Hermes/orchestration remains responsible for interpreting the human confirmation;
@@ -420,7 +423,7 @@ Production hosting and packaging remain open. RF-01A does not choose XCodePod ve
 
 ### Configuration
 
-For the accepted local runtime, Hermes configuration and credentials live under its managed `~/.hermes` runtime state, while 9Router owns its OpenRouter credential and physical model fallback list. The canonical FARIA identity is `agent/prompts/SOUL.md`, synchronized operationally to the active profile's `SOUL.md`; the repo skill root is added through Hermes `skills.external_dirs`. Household MCP reads only `FARIA_DB_PATH` as an optional database-path override and otherwise uses `~/.faria/data/faria.db`. Machine-specific paths remain outside committed configuration. Secrets are never hard-coded or committed.
+For the accepted local runtime, Hermes configuration and credentials live under its managed `~/.hermes` runtime state, while 9Router owns its OpenRouter credential and physical model fallback list. The canonical FARIA identity is `agent/prompts/SOUL.md`, synchronized operationally to the active profile's `SOUL.md`; the repo skill root is added through Hermes `skills.external_dirs`. Authorized Telegram DMs receive a local-only `telegram.channel_prompts` member context keyed by their private DM chat ID. That context provides the conversational alias after the allowlist check; it does not authorize the sender. Household MCP reads only `FARIA_DB_PATH` as an optional database-path override and otherwise uses `~/.faria/data/faria.db`. Machine-specific paths remain outside committed configuration. Secrets and Telegram IDs are never hard-coded or committed.
 
 ---
 
@@ -471,7 +474,7 @@ No ADRs exist yet. The technical direction in this document (Hermes, 9Router, Op
 ### Operational Constraints
 
 - The proven development topology is macOS-specific; production hosting and process supervision are not yet finalized.
-- Only one household member is currently configured and tested in the Telegram allowlist. Second-member onboarding and testing remain prerequisites before shared household use.
+- The owner DM is configured in the Telegram allowlist and local conversational identity mapping. Spouse onboarding and testing remain prerequisites before shared household use.
 
 ### Legacy / Integration Constraints
 
@@ -534,6 +537,7 @@ Do not update this document for routine internal refactoring that preserves the 
 
 | Version | Date | Change | Author |
 |---|---|---|---|
+| 0.5 | `2026-09-12` | Added local Telegram DM member-context mapping and separated display identity from authorization | sipratama |
 | 0.4 | `2026-09-12` | Added the repo-owned FARIA identity/Finance skill and restricted Telegram tool/skill surface from RF-03 | sipratama |
 | 0.3 | `2026-09-12` | Recorded the RF-02 Household MCP, SQLite migration strategy, tool surface, and confirmation/identity boundaries | sipratama |
 | 0.2 | `2026-09-12` | Aligned local runtime topology and RF-01 acceptance with the verified managed Hermes/launchd/9Router setup | sipratama |

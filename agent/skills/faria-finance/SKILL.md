@@ -1,7 +1,7 @@
 ---
 name: faria-finance
 description: Handle monthly income allocation and explicit confirmation.
-version: 0.1.0
+version: 0.2.0
 author: sipratama, Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -29,15 +29,16 @@ Gunakan untuk pesan tentang income/gaji bulanan, status atau penyusunan alokasi 
 - `savings` hanya line item alokasi; jangan mengklaim SavingsGoal atau SavingsContribution dibuat.
 - Jangan memanggil terminal, file, browser, web, code execution, delegation, computer use, atau tool di luar Household MCP.
 - Tolak singkat permintaan di luar household finance/operations tanpa menjalankan tool yang tidak relevan.
+- Tampilkan dua line item `personal_allowance` dengan label `Allowance Ayah Singgih` dan `Allowance Mami Farah`. Nama ini hanya label percakapan; jangan mengubah kontrak Household MCP atau memperlakukannya sebagai bukti identitas.
 
 ## Prosedur Monthly Allocation
 
 1. Tentukan periode eksplisit `YYYY-MM`. Untuk "bulan ini", gunakan bulan kalender lokal saat ini. Jika nama bulan tanpa tahun dapat merujuk ke lebih dari satu periode, tanyakan tahunnya. Jangan meminta Household MCP menebak periode.
 2. Normalisasi hanya nominal Indonesia yang jelas menjadi integer IDR, misalnya `25 juta`, `25 jt`, `Rp25.000.000`, atau `24,5 juta`. Jika nominal bersifat perkiraan seperti `20-an juta` atau `belasan juta`, minta angka pasti. Jangan kirim float.
 3. WAJIB panggil `monthly_allocation_get` pada turn yang sama, tepat sebelum setiap `monthly_allocation_save_draft`, `monthly_allocation_confirm`, atau `monthly_allocation_discard_draft`. Hasil `get` dari pesan/turn sebelumnya tidak cukup. Jika sudah ada allocation `CONFIRMED`, jangan simpan atau menimpa apa pun; jelaskan bahwa edit/replacement periode itu di luar scope.
-4. Jika belum cukup nilai, sebutkan income dan periode yang dipahami lalu tanyakan semua nilai yang masih kurang dalam satu pertanyaan ringkas dengan label household: zakat, sedekah, tabungan, budget rumah tangga, allowance suami, allowance istri, dan keputusan tentang sisa/buffer. Jangan menawarkan angka atau pembagian. Jangan menyimpan draft parsial yang tidak diminta sebagai susunan final.
+4. Jika belum cukup nilai, sebutkan income dan periode yang dipahami lalu tanyakan semua nilai yang masih kurang dalam satu pertanyaan ringkas dengan label household: zakat, sedekah, tabungan, budget rumah tangga, Allowance Ayah Singgih, Allowance Mami Farah, dan keputusan tentang sisa/buffer. Jangan menawarkan angka atau pembagian. Jangan menyimpan draft parsial yang tidak diminta sebagai susunan final.
 5. Hitung sisa secara deterministik sebagai `income - jumlah line item`. Bila household belum menyatakan semua sisa menjadi buffer, tampilkan sebagai "Sisa / belum dialokasikan" dan minta keputusan; jangan otomatis membuat item `buffer`.
-6. Setelah periode, income, dan nilai intended lengkap, langsung panggil `monthly_allocation_save_draft` tanpa meminta konfirmasi lebih dulu. Gunakan kategori yang didukung: `zakat`, `sedekah`, `savings`, `household_budget`, `personal_allowance`, dan `buffer`. Bedakan allowance suami/istri melalui `label`. Konfirmasi diperlukan untuk transisi DRAFT menjadi authoritative, bukan untuk menyimpan DRAFT.
+6. Setelah periode, income, dan nilai intended lengkap, langsung panggil `monthly_allocation_save_draft` tanpa meminta konfirmasi lebih dulu. Gunakan kategori yang didukung: `zakat`, `sedekah`, `savings`, `household_budget`, `personal_allowance`, dan `buffer`. Bedakan kedua allowance melalui `label` display household di atas. Konfirmasi diperlukan untuk transisi DRAFT menjadi authoritative, bukan untuk menyimpan DRAFT.
 7. Setelah tool berhasil, tampilkan draft lengkap dari respons authoritative tool: periode, income, setiap line item beserta label, total allocated, remainder, dan `Status: DRAFT`. Minta pengguna mengetik kalimat yang jelas setara dengan `Konfirmasi alokasi`.
 
 ## Koreksi Draft

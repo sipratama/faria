@@ -1,6 +1,6 @@
 # Developer Setup — FARIA
 
-> **Scope:** Accepted macOS development path through RF-03: runtime connectivity, Household MCP, repo-owned FARIA identity/Finance skill, and the Telegram monthly-allocation conversation slice. The dashboard is not included.
+> **Scope:** Accepted macOS development path through RF-03B: runtime connectivity, Household MCP, repo-owned FARIA identity/Finance skill, Telegram monthly allocation, and local household-member identity mapping. The dashboard is not included.
 
 ## 1. Prerequisites
 
@@ -102,7 +102,7 @@ Expected response:
 FARIA Telegram connected
 ```
 
-Only one household member has currently been configured and tested. Second household member onboarding remains an operational prerequisite before shared household use.
+Only the owner account is currently configured and tested. The spouse account must be added to the same explicit allowlist before its identity mapping can be configured and tested.
 
 ## 7. Install and Test Household MCP
 
@@ -168,6 +168,12 @@ hermes mcp test faria-household
 ```
 
 The `faria-finance` skill remains naturally discoverable from ordinary household language; a slash command is not required. Hermes v0.21.2 does not reliably expose MCP toolset availability to external-skill discovery conditions, so the skill documents the four `faria-household` tools as a runtime prerequisite rather than using `requires_toolsets` frontmatter.
+
+### Configure Household Member Identity
+
+Use Hermes v0.21.2's supported `telegram.channel_prompts` configuration to inject trusted member context for each authorized private DM. Keep actual DM chat IDs only in Hermes-managed local configuration. Configure the owner as `owner` / `OWNER` / `Ayah Singgih` and, after spouse onboarding, configure the spouse as `spouse` / `SPOUSE` / `Mami Farah`.
+
+For a Telegram private DM, Hermes resolves `channel_prompts` from the DM chat ID on every turn. This makes identity available in fresh sessions without depending on `USER.md`, model memory, Telegram display names, usernames, or self-claimed identity. The matching allowlist entry must already authorize the sender; the prompt itself grants no access.
 
 ## 11. Restrict and Refresh Telegram
 

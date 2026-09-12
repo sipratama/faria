@@ -149,6 +149,7 @@ Household tidak seharusnya menghitung ulang setiap bucket secara manual setiap b
 **Acceptance Criteria**
 
 - Given income bulanan dan seluruh nilai intended telah diberikan, when Hermes menghasilkan draft, then draft mencakup line item zakat, sedekah, savings, household budget, dan allowance.
+- Given dua line item personal allowance ditampilkan, when Hermes menyajikan draft, then label percakapannya adalah `Allowance Ayah Singgih` dan `Allowance Mami Farah` tanpa mengubah kategori internal `personal_allowance`.
 - Given belum ada allocation rule yang dikonfigurasi untuk suatu bucket, when draft dihasilkan, then bucket tersebut ditampilkan ke user sebagai perlu input eksplisit, bukan nilai tebakan.
 - Given household belum memutuskan bahwa remainder menjadi buffer, when Hermes menghitung remainder, then nilai tersebut ditampilkan sebagai belum dialokasikan dan tidak diam-diam disimpan sebagai buffer.
 
@@ -238,6 +239,8 @@ P1
 
 Allowlist Telegram adalah external identity boundary dan harus ditegakkan sebelum Hermes memproses pesan. Household MCP RF-02 membatasi capability melalui narrow tool contract dan state invariants, tetapi stdio MCP saat ini tidak membawa identitas per-user Telegram yang dapat dipercaya. Karena itu, `confirmation_reference` bila diberikan hanya metadata audit non-authoritative, bukan bukti autentikasi atau konfirmasi manusia.
 
+Alias household seperti Ayah Singgih dan Mami Farah hanya untuk personalisasi. Alias, display name, username, dan klaim identitas di dalam pesan tidak pernah menggantikan allowlist Telegram atau trusted runtime member context.
+
 Frontend/chat visibility bukan security enforcement.
 
 ---
@@ -304,6 +307,7 @@ Required states yang relevan:
 
 - Draft tidak boleh pernah auto-confirmed secara diam-diam.
 - Konfirmasi harus jelas merujuk ke draft terakhir dan setara dengan `Konfirmasi alokasi`; acknowledgement umum seperti `sip`, `oke`, atau emoji tidak cukup.
+- Personal allowance ditampilkan sebagai `Allowance Ayah Singgih` dan `Allowance Mami Farah`.
 
 ### Accessibility
 
@@ -430,6 +434,7 @@ Koreksi schema yang sudah diterapkan dilakukan lewat forward version-controlled 
 
 | Version | Date | Change | Author |
 |---|---|---|---|
+| 0.4 | `2026-09-12` | Added household display labels for the two personal allowance line items | sipratama |
 | 0.3 | `2026-09-12` | Added RF-03 conversation, correction, remainder, explicit-confirmation, and confirmed-period behavior | sipratama |
 | 0.2 | `2026-09-12` | Recorded the RF-02 MCP tool surface and clarified draft persistence, period, identity, and confirmation boundaries | sipratama |
 | 0.1 | `2026-09-11` | Initial draft | sipratama |
