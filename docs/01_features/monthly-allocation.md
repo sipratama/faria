@@ -2,7 +2,7 @@
 
 > **Peran dokumen:** Authoritative source untuk **detailed behavior dari satu feature**.
 >
-> Product-level scope berada di PRD. Cross-cutting technical design berada di System Architecture. Exact Household MCP tool contract akan diformalkan saat implementasi.
+> Product-level scope berada di PRD. Cross-cutting technical design berada di System Architecture. Exact Household MCP tool contract untuk RF-02 tercatat di Section 9.
 
 ---
 
@@ -16,14 +16,14 @@
 | Owner | sipratama |
 | Priority | P0 |
 | Target Release | V1 |
-| Last Updated | `2026-09-11` |
+| Last Updated | `2026-09-12` |
 
 ### Related Sources
 
 - PRD: `../00_product/PRD.md` (`CAP-ALLOC-001`)
 - Architecture: `../02_architecture/SYSTEM_ARCHITECTURE.md`
 - ADRs: none yet
-- API Contract: Household MCP tools (contract TBD at implementation)
+- API Contract: Household MCP tools (Section 9)
 - Event Contract: N/A
 - UX Flow / Design: N/A for V1
 
@@ -81,17 +81,16 @@ Telegram: pesan income
    ↓
 Hermes: kenali intent monthly-allocation
    ↓
-Household MCP: get_current_allocation (rules/state)
+Household MCP: monthly_allocation_get (state untuk periode eksplisit)
    ↓
-Hermes: buat DRAFT allocation (create_monthly_allocation, draft)
+Hermes: simpan DRAFT allocation (monthly_allocation_save_draft)
    ↓
 Hermes: tampilkan draft ke user
    ↓
 User: konfirmasi?
   ↙ Ya          ↘ Tidak / minta koreksi
 Household MCP:      Hermes meminta koreksi
-confirm_monthly_     dan membuat ulang draft
-allocation
+monthly_allocation_confirm dan memperbarui draft
    ↓
 FARIA: ringkasan konfirmasi
    ↓
@@ -100,12 +99,12 @@ Dashboard merefleksikan state terbaru
 
 1. User mengirim pesan Telegram yang menyatakan income bulanan.
 2. Hermes mengenali intent monthly-allocation.
-3. Hermes memanggil Household MCP untuk mengambil allocation rules/state saat ini.
-4. Hermes membuat DRAFT allocation (belum authoritative).
+3. Hermes menentukan periode yang dimaksud dan memanggil Household MCP dengan periode `YYYY-MM` eksplisit untuk mengambil state saat ini.
+4. Hermes membuat dan menyimpan DRAFT allocation (persisted untuk dilanjutkan/review, tetapi belum authoritative).
 5. Hermes menampilkan proposed allocation ke user untuk direview.
 6. User mengonfirmasi secara eksplisit (atau meminta perubahan).
-7. Hermes memanggil Household MCP untuk memvalidasi dan persist allocation yang terkonfirmasi.
-8. Household MCP persist allocation ke SQLite.
+7. Hermes memanggil `monthly_allocation_confirm` setelah orchestration layer menetapkan bahwa user sudah mengonfirmasi secara eksplisit.
+8. Household MCP secara atomik mengubah draft yang tersimpan menjadi Confirmed di SQLite.
 9. FARIA merespons dengan ringkasan yang terkonfirmasi.
 10. Dashboard merefleksikan update household state/agent activity.
 
@@ -116,7 +115,7 @@ Dashboard merefleksikan state terbaru
 
 ### Alternate Flow — AF-02 (User tidak mengonfirmasi)
 
-1. Draft allocation tetap unconfirmed dan tidak persisted sebagai authoritative.
+1. Draft allocation tetap unconfirmed; draft boleh tersimpan untuk direvisit tetapi tidak menjadi authoritative.
 2. Draft dapat direvisit di pesan berikutnya dalam periode yang sama.
 
 ---
@@ -158,7 +157,7 @@ P0
 ### FR-ALLOC-003 — Present Draft for Confirmation
 
 **Requirement**
-FARIA harus menampilkan seluruh proposed allocation ke user sebelum ada persistence yang terjadi.
+FARIA harus menampilkan seluruh proposed allocation ke user sebelum allocation menjadi authoritative.
 
 **Rationale**
 Household harus dapat mereview allocation sebelum menjadi authoritative.
@@ -235,7 +234,7 @@ P1
 | Membuat draft allocation | Household Owner / Spouse | Harus ada di Telegram allowlist |
 | Mengonfirmasi allocation | Household Owner / Spouse | Harus ada di Telegram allowlist |
 
-Authoritative authorization ditegakkan di boundary Household MCP (allowlist + tool contract), bukan hanya di layer bot Telegram.
+Allowlist Telegram adalah external identity boundary dan harus ditegakkan sebelum Hermes memproses pesan. Household MCP RF-02 membatasi capability melalui narrow tool contract dan state invariants, tetapi stdio MCP saat ini tidak membawa identitas per-user Telegram yang dapat dipercaya. Karena itu, `confirmation_reference` bila diberikan hanya metadata audit non-authoritative, bukan bukti autentikasi atau konfirmasi manusia.
 
 Frontend/chat visibility bukan security enforcement.
 
@@ -248,7 +247,7 @@ Frontend/chat visibility bukan security enforcement.
 | Field / Concept | Required | Rules |
 |---|---:|---|
 | Nominal income bulanan | Yes | Nominal numerik positif |
-| Periode allocation (bulan/tahun) | Yes | Default ke periode saat ini jika tidak disebutkan |
+| Periode allocation (bulan/tahun) | Yes | Orchestration boleh menentukan periode saat ini bila user tidak menyebutkan; Household MCP selalu menerima `YYYY-MM` eksplisit |
 | Household allocation rules (zakat/sedekah/savings/budget/allowance) | No | Fallback bertanya ke household jika rule belum dikonfigurasi |
 
 ### Outputs
@@ -270,11 +269,14 @@ Physical schema: lihat `../02_architecture/DATA_MODEL.md`.
 
 ### APIs (Household MCP tools)
 
-| Operation | Contract | Purpose |
+| Operation | Input utama | Purpose |
 |---|---|---|
-| `get_current_allocation` | Household MCP (contract TBD) | Mengambil periode/rules saat ini |
-| `create_monthly_allocation` | Household MCP (contract TBD) | Membuat draft |
-| `confirm_monthly_allocation` | Household MCP (contract TBD) | Persist allocation terkonfirmasi |
+| `monthly_allocation_get` | `period` | Mengambil current draft dan Confirmed allocation untuk periode eksplisit |
+| `monthly_allocation_save_draft` | `period`, `income_idr`, `items[]` | Membuat atau memperbarui satu active draft non-authoritative |
+| `monthly_allocation_confirm` | `allocation_id`, optional `confirmation_reference` | Transisi idempotent Draft ke Confirmed setelah konfirmasi ditetapkan di orchestration layer |
+| `monthly_allocation_discard_draft` | `allocation_id` | Transisi Draft ke Discarded; Confirmed tidak dapat dibuang |
+
+Semua nominal menggunakan integer IDR. Tool tidak menginfer periode, menghitung formula zakat, membuat aturan sedekah, menerima raw SQL, atau menghapus Confirmed allocation.
 
 ### External Services
 
@@ -353,8 +355,8 @@ Required states yang relevan:
 | Test ID | Requirement | Level | Scenario |
 |---|---|---|---|
 | T-001 | `FR-ALLOC-002` | Unit | Draft allocation dihasilkan dengan benar dari rules yang dikonfigurasi |
-| T-002 | `FR-ALLOC-004` | Integration | Allocation tidak persisted sebelum konfirmasi eksplisit |
-| T-003 | `FR-ALLOC-004` | Integration | Pengirim non-allowlisted tidak dapat mengonfirmasi allocation |
+| T-002 | `FR-ALLOC-004` | Integration | Draft yang tersimpan tetap non-authoritative sampai tool confirm dipanggil |
+| T-003 | `FR-ALLOC-004` | Integration | Pengirim non-allowlisted tidak dapat mengonfirmasi allocation (deferred ke Telegram/orchestration slice RF-03) |
 
 ### Minimum Regression Coverage
 
@@ -378,7 +380,7 @@ Belum applicable.
 
 ### Rollback / Recovery
 
-Revert perubahan Household MCP/schema lewat version-controlled migration jika rollout pertama perlu dikoreksi.
+Koreksi schema yang sudah diterapkan dilakukan lewat forward version-controlled migration. Sebelum production use, backup/restore SQLite harus tersedia sesuai keputusan operations yang masih terbuka.
 
 ---
 
@@ -400,7 +402,7 @@ Revert perubahan Household MCP/schema lewat version-controlled migration jika ro
 |---|---|---|---|
 | Q-01 | Formula/aturan alokasi zakat penghasilan yang tepat | Household | Yes |
 | Q-02 | Aturan/nominal sedekah bulanan yang berulang | Household | Yes |
-| Q-03 | Contract tool Household MCP yang tepat (parameter/response shape) | Implementation | No |
+| Q-03 | Contract tool Household MCP yang tepat (parameter/response shape) | Resolved in RF-02; see Section 9 | No |
 
 ---
 
@@ -424,4 +426,5 @@ Revert perubahan Household MCP/schema lewat version-controlled migration jika ro
 
 | Version | Date | Change | Author |
 |---|---|---|---|
+| 0.2 | `2026-09-12` | Recorded the RF-02 MCP tool surface and clarified draft persistence, period, identity, and confirmation boundaries | sipratama |
 | 0.1 | `2026-09-11` | Initial draft | sipratama |

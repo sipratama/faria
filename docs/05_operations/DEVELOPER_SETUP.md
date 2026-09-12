@@ -1,12 +1,13 @@
 # Developer Setup — FARIA
 
-> **Scope:** RF-01 runtime connectivity only. This is the accepted macOS development path; it does not install Household MCP, SQLite business persistence, Monthly Allocation, or the dashboard.
+> **Scope:** Accepted macOS development path for RF-01 runtime connectivity and the RF-02 Household MCP monthly-allocation core. Telegram allocation orchestration and the dashboard are not included.
 
 ## 1. Prerequisites
 
 - macOS with Docker available through OrbStack or an equivalent Docker runtime;
 - a local 9Router instance publishing host port `20128`;
 - the official Hermes managed installer;
+- Python 3.11+ and `uv` for Household MCP;
 - a Telegram BotFather token and explicit household-user allowlist for gateway setup.
 
 Keep all API credentials, bot tokens, and Telegram user IDs outside this repository.
@@ -103,7 +104,46 @@ FARIA Telegram connected
 
 Only one household member has currently been configured and tested. Second household member onboarding remains an operational prerequisite before shared household use.
 
-## 7. Repeat Non-Secret Checks
+## 7. Install and Test Household MCP
+
+From the repository root:
+
+```bash
+cd household-mcp
+uv sync
+uv run pytest
+```
+
+The server uses local stdio transport and exposes only four monthly-allocation tools. Its default database is `~/.faria/data/faria.db`; set `FARIA_DB_PATH` only when an isolated database is required. Tests always use temporary databases.
+
+## 8. Register Household MCP with Hermes
+
+After automated tests pass, register the environment's console entry point with the supported Hermes CLI:
+
+```bash
+hermes mcp add faria-household \
+  --command "$(pwd)/.venv/bin/faria-household-mcp"
+```
+
+The command above is run from `household-mcp/`. The resulting absolute path belongs only in Hermes-managed local configuration and must not be committed. Configure `mcp_servers.faria-household.tools.include` to exactly:
+
+```text
+monthly_allocation_get
+monthly_allocation_save_draft
+monthly_allocation_confirm
+monthly_allocation_discard_draft
+```
+
+Also set `mcp_servers.faria-household.sampling.enabled` to `false`, because this deterministic domain server never requests model sampling. Then verify:
+
+```bash
+hermes mcp test faria-household
+hermes mcp list
+```
+
+Use a temporary `FARIA_DB_PATH` and synthetic future-period values for manual acceptance; never test against the personal database.
+
+## 9. Repeat Non-Secret Checks
 
 ```bash
 scripts/runtime/check-runtime.sh
@@ -111,7 +151,7 @@ scripts/runtime/check-runtime.sh
 
 See `scripts/runtime/README.md` for the recorded manual acceptance evidence and the still-unverified unauthorized-identity rejection check.
 
-## 8. Related Documents
+## 10. Related Documents
 
 - `docs/05_operations/CONFIGURATION.md`
 - `scripts/runtime/README.md`

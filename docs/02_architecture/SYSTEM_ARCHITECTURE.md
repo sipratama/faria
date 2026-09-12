@@ -12,7 +12,7 @@
 |---|---|
 | Project | FARIA |
 | Status | Draft |
-| Version | `0.2` |
+| Version | `0.3` |
 | Architecture Owner | sipratama |
 | Last Updated | `2026-09-12` |
 
@@ -146,15 +146,15 @@ Hermes Runtime ---> Docker terminal sandbox ---> egress firewall
 
 Docker isolates Hermes terminal/tool execution and runs 9Router; it does not host Hermes itself in the accepted local development topology.
 
-### Planned V1 Components
+### Implemented and Planned V1 Components
 
-| Component | Responsibility | Technology | Production Deployment Unit |
+| Component | Responsibility | Technology | Current / Planned Execution Unit |
 |---|---|---|---|
-| Household MCP | Constrained domain tool server for authoritative state | Custom MCP server | TBD before implementation/deployment |
+| Household MCP (RF-02 implemented locally) | Four constrained monthly-allocation tools over stdio | Python 3.11, official MCP SDK, stdlib SQLite | Hermes-managed local stdio process; production unit TBD |
 | Dashboard | Agent Control Center web UI | React / Next.js | TBD before deployment |
 | SQLite | Authoritative structured data | SQLite file | Host/volume and backup mechanism TBD before production use |
 
-The logical relationships among Hermes, Household MCP, SQLite, and the dashboard remain as documented throughout this architecture. RF-01A does not choose production packaging for them.
+The logical relationships among Hermes, Household MCP, SQLite, and the dashboard remain as documented throughout this architecture. RF-02 establishes the local deterministic `Hermes -> Household MCP -> SQLite` path but does not choose production packaging.
 
 ---
 
@@ -237,7 +237,7 @@ No cache or message broker exists in V1.
 
 ### Schema Management
 
-Persistent schema changes are managed through version-controlled migrations. Exact migration tooling is not yet selected (see Open Architecture Questions).
+Household MCP applies ordered, explicit SQL migrations and records each version plus checksum in SQLite. RF-02 intentionally uses a minimal in-process migration runner rather than a framework.
 
 ### Transactions
 
@@ -267,17 +267,18 @@ Household MCP tools (constrained, function-call-style interface for the LLM — 
 
 ### Contract Source
 
-Household MCP tool contracts, expected to include operations such as `create_monthly_allocation`, `get_current_allocation`, `confirm_monthly_allocation`, `create_savings_goal`, `record_savings_contribution`, `get_savings_progress`, `record_zakat`, `record_sedekah`, `create_household_routine`, `complete_household_routine`, and `get_household_summary`. Exact parameter/response shapes are refined during implementation, not invented here.
+RF-02 exposes exactly `monthly_allocation_get`, `monthly_allocation_save_draft`, `monthly_allocation_confirm`, and `monthly_allocation_discard_draft`. The feature specification owns their behavior. Later domain tools are added only with their corresponding feature implementation.
 
 ### API Principles
 
 - the LLM never receives raw SQL or shell access;
 - every state-changing tool call is scoped to one domain operation;
-- material financial changes require the confirmation step (PRD PR-001) before any Household MCP write occurs.
+- draft writes may persist non-authoritative working state;
+- material financial changes require an explicit prior human confirmation step (PRD PR-001) before `monthly_allocation_confirm` makes the allocation authoritative.
 
 ### Error Model
 
-To be defined at implementation time; must distinguish "not yet confirmed" from "failed to persist" so Hermes never claims a change succeeded when it did not.
+RF-02 distinguishes validation, not-found, invalid-state, and period-conflict failures. MCP callers must treat tool errors as failed operations and must not claim persistence succeeded.
 
 ---
 
@@ -299,7 +300,7 @@ Ownership-based — both allowlisted household members have full access to the s
 
 ### Enforcement Boundary
 
-The allowlist check happens before Hermes processes a message; Household MCP additionally scopes every tool call to allowed operations, so authorization is not delegated to the LLM's judgment alone.
+The allowlist check happens before Hermes processes a Telegram message. Household MCP additionally scopes every call to four allowed domain operations and enforces validation/state invariants. The current stdio MCP transport does not provide trustworthy per-Telegram-user identity to Household MCP, so an actor/reference supplied to a tool is audit-only and is not an authentication boundary.
 
 ### Identity Flow
 
@@ -310,7 +311,7 @@ Allowlist check (Hermes)
   ↓
 Hermes skill processing
   ↓
-Household MCP tool authorization
+Household MCP constrained tool boundary
   ↓
 SQLite (protected resource)
 ```
@@ -345,7 +346,7 @@ SQLite / Backup
 - only allowlisted Telegram identities are processed;
 - the LLM never receives raw SQL access to authoritative household state; authoritative reads/writes use only Household MCP's constrained tools;
 - Hermes terminal execution uses a Docker sandbox with the egress firewall enabled in the accepted local topology; its broader general-purpose tool/skill surface remains a security-hardening concern before routine shared-household use;
-- material financial state changes require explicit human confirmation before persistence;
+- material financial state changes require explicit human confirmation before becoming authoritative; Household MCP enforces that only its confirm transition can make a draft authoritative, while Hermes/orchestration remains responsible for interpreting the human confirmation;
 - 9Router and Household MCP are not publicly exposed beyond what Hermes/dashboard need;
 - privileged/state-changing Household MCP calls should be auditable (who/when/what).
 
@@ -367,7 +368,7 @@ Hermes → 9Router → OpenRouter calls must have explicit timeout behavior (exa
 
 ### Retries
 
-Safe to retry read-only Household MCP calls (e.g. `get_current_allocation`). Write operations (e.g. `confirm_monthly_allocation`) must be idempotent per period to tolerate retries/duplicate confirmation attempts.
+Safe to retry read-only Household MCP calls such as `monthly_allocation_get`. Repeating `monthly_allocation_confirm` for the same allocation is idempotent; confirming a different draft after the period already has a Confirmed allocation fails without overwriting it.
 
 ### Idempotency
 
@@ -419,7 +420,7 @@ Production hosting and packaging remain open. RF-01A does not choose XCodePod ve
 
 ### Configuration
 
-For the accepted local runtime, Hermes configuration and credentials live under its managed `~/.hermes` runtime state, while 9Router owns its OpenRouter credential and physical model fallback list. FARIA repository configuration will be introduced only when an implemented FARIA component consumes it. Secrets are never hard-coded or committed.
+For the accepted local runtime, Hermes configuration and credentials live under its managed `~/.hermes` runtime state, while 9Router owns its OpenRouter credential and physical model fallback list. Household MCP reads only `FARIA_DB_PATH` as an optional database-path override and otherwise uses `~/.faria/data/faria.db`. Hermes MCP registration may contain a machine-specific executable path outside the repository's committed configuration. Secrets are never hard-coded or committed.
 
 ---
 
@@ -481,6 +482,7 @@ No ADRs exist yet. The technical direction in this document (Hermes, 9Router, Op
 - The accepted Hermes topology is a managed macOS installation with a launchd-supervised gateway, not a FARIA-owned application container.
 - Hermes exposes general-purpose tools and skills beyond FARIA's intended household scope. Docker terminal isolation and the egress firewall reduce risk but do not replace a future FARIA-specific tool/skill restriction review (see AQ-07 and `docs/05_operations/CONFIGURATION.md`).
 - Rejection of a non-allowlisted Telegram identity has not yet been tested; this is an operational security follow-up, not a claim of acceptance.
+- Hermes stdio MCP does not currently propagate a trustworthy Telegram-user identity to Household MCP; Telegram allowlisting remains the external authentication boundary, and `confirmation_reference` is audit-only.
 
 ---
 
@@ -499,8 +501,8 @@ No ADRs exist yet. The technical direction in this document (Hermes, 9Router, Op
 | ID | Question | Decision Needed By | Owner |
 |---|---|---|---|
 | AQ-01 | Final production hosting and runtime packaging (including XCodePod.Cloud vs. paid VPS and host-managed vs. containerized processes) | Before deployment | Household |
-| AQ-02 | Exact Household MCP tool contract shapes | Before Household MCP implementation | Implementation |
-| AQ-03 | Migration/schema tooling for SQLite | Before first schema is created | Implementation |
+| AQ-02 | Exact Household MCP tool contract shapes | Resolved in RF-02; see monthly-allocation feature spec | Implementation |
+| AQ-03 | Migration/schema tooling for SQLite | Resolved in RF-02: ordered SQL files + checksum metadata | Implementation |
 | AQ-04 | Encrypted backup destination and mechanism | Before production use | Household |
 | AQ-05 | Dashboard framework specifics beyond "React/Next.js" (state management, exact API style) | Before dashboard implementation | Implementation |
 | AQ-06 | Whether personas ever become independent agents | Only if real requirements justify it | Household / Implementation |
@@ -532,5 +534,6 @@ Do not update this document for routine internal refactoring that preserves the 
 
 | Version | Date | Change | Author |
 |---|---|---|---|
+| 0.3 | `2026-09-12` | Recorded the RF-02 Household MCP, SQLite migration strategy, tool surface, and confirmation/identity boundaries | sipratama |
 | 0.2 | `2026-09-12` | Aligned local runtime topology and RF-01 acceptance with the verified managed Hermes/launchd/9Router setup | sipratama |
 | 0.1 | `2026-09-11` | Initial draft | sipratama |

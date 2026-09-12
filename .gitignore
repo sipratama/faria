@@ -66,3 +66,16 @@ out/
 tmp/
 *.tmp
 *.bak
+
+# ==========================================
+# Python / SQLite local artifacts
+# ==========================================
+.venv/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3

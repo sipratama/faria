@@ -1,6 +1,6 @@
 # Configuration — FARIA
 
-> **Scope:** RF-01 runtime connectivity only. The accepted setup is configured through Hermes and 9Router, not through a repository `.env` file or FARIA-owned container configuration.
+> **Scope:** RF-01 runtime connectivity plus RF-02 Household MCP runtime configuration. Hermes and 9Router remain externally managed; Household MCP has one optional repository-owned runtime setting.
 
 ## 1. Hermes-Managed Configuration
 
@@ -32,9 +32,21 @@ The Telegram bot token and explicit allowlist also remain in Hermes-managed conf
 
 ## 2. FARIA Repository Configuration
 
-RF-01 has no repository-owned application process and therefore needs no repository `.env`, Compose file, or committed Hermes config template. Later batches may add narrowly scoped configuration when an implemented FARIA component actually consumes it.
+Household MCP is the first repository-owned process. It supports one optional environment variable:
+
+| Setting | Default | Purpose |
+|---|---|---|
+| `FARIA_DB_PATH` | `~/.faria/data/faria.db` | Override the SQLite path for isolated development/manual acceptance |
+
+The default and any personal database must remain outside the Git repository. The process creates the parent directory and database with owner-only permissions. No repository `.env`, Compose file, or committed Hermes config is required.
 
 Do not duplicate Hermes or 9Router secrets into this repository for convenience.
+
+### Hermes MCP Registration
+
+Register the local stdio server as `faria-household` through `hermes mcp add`. In Hermes-managed `config.yaml`, restrict `tools.include` to the four RF-02 tool names documented in `docs/01_features/monthly-allocation.md` and set `sampling.enabled: false`. A machine-specific absolute command path is expected locally but must never be copied into repository configuration or documentation as a concrete private path.
+
+The optional `confirmation_reference` tool field is an untrusted audit label. It does not replace the Telegram allowlist and does not prove which user confirmed an allocation.
 
 ## 3. 9Router Configuration
 
@@ -53,8 +65,9 @@ FARIA owns only these architectural expectations:
 - Hermes still exposes general-purpose tools and skills beyond FARIA's intended household scope, so tighter tool/skill restriction remains a later security-hardening task;
 - one household member is configured and tested; spouse onboarding/testing remains outstanding;
 - rejection of a non-allowlisted Telegram identity has not yet been tested.
+- stdio MCP calls do not currently carry trustworthy per-Telegram-user identity into Household MCP; Telegram allowlisting remains the external authentication boundary.
 
-The last two operational checks do not block RF-02 engineering work, but they must be completed before shared household use is considered accepted.
+These operational checks do not block RF-02 engineering work, but they must be completed before shared household use is considered accepted.
 
 ## 5. Related Documents
 

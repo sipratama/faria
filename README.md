@@ -4,7 +4,7 @@ FARIA (FArah RIzkia Ananda) is a private, single-household **AI Household Operat
 
 ## Status
 
-Documentation-initialized personal MVP. RF-01 runtime connectivity is proven with a managed Hermes installation on macOS, a launchd-supervised Telegram gateway, and 9Router running locally through Docker/OrbStack. FARIA application code, Household MCP, business persistence, and product features have not been implemented yet.
+Personal MVP with RF-01 runtime connectivity and the RF-02 monthly-allocation core implemented. The accepted local runtime uses managed Hermes on macOS, a launchd-supervised Telegram gateway, and 9Router through Docker/OrbStack. Household MCP now provides a constrained Python stdio server backed by SQLite; Telegram allocation orchestration, the Finance skill, and the dashboard remain deferred.
 
 ## What FARIA Does (V1)
 
@@ -23,7 +23,7 @@ One Hermes agent runtime orchestrates four logical personas (Finance, Giving, Ho
 
 ## First Vertical Slice
 
-**Monthly Allocation**: Telegram income message → Hermes drafts an allocation → household confirms → Household MCP persists to SQLite → dashboard reflects the confirmed state. See `docs/01_features/monthly-allocation.md`.
+**Monthly Allocation**: RF-02 implements and tests the deterministic Household MCP + SQLite segment: save a non-authoritative draft, explicitly confirm it, and query the resulting authoritative state. The Telegram/Hermes conversational segment and dashboard reflection remain later slices. See `docs/01_features/monthly-allocation.md`.
 
 ## Documentation Map
 
@@ -45,4 +45,4 @@ Hermes (agent runtime) · 9Router (model gateway) · OpenRouter (model provider)
 
 ## Setup
 
-RF-01 (Runtime Foundation) established the minimum runtime path: Telegram → Hermes Gateway → 9Router → model. See `docs/05_operations/DEVELOPER_SETUP.md` to configure the managed local installation and `scripts/runtime/README.md` for acceptance evidence and repeatable checks. Household MCP, SQLite, Monthly Allocation, and the dashboard app are not part of this yet.
+RF-01 established Telegram → Hermes Gateway → 9Router → model. RF-02 adds Hermes → Household MCP → SQLite for monthly allocation. See `docs/05_operations/DEVELOPER_SETUP.md` for local installation, testing, and Hermes MCP registration, and `scripts/runtime/README.md` for RF-01 runtime checks.
