@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import sqlite3
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -32,7 +34,7 @@ def test_new_database_initializes_once_and_enables_foreign_keys(database) -> Non
         migration_count = connection.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
         foreign_keys = connection.execute("PRAGMA foreign_keys").fetchone()[0]
 
-    assert migration_count == 1
+    assert migration_count == 2
     assert foreign_keys == 1
     assert database.path.exists()
     assert database.path.parent.exists()
@@ -46,6 +48,49 @@ def test_database_path_defaults_outside_repository_and_supports_override(monkeyp
     override = tmp_path / "custom.db"
     monkeypatch.setenv("FARIA_DB_PATH", str(override))
     assert default_database_path() == override
+
+
+def test_existing_rf02_database_upgrades_forward_without_losing_allocation(tmp_path) -> None:
+    source_migration = Path(__file__).parents[1] / "migrations" / "001_monthly_allocation.sql"
+    script = source_migration.read_text(encoding="utf-8")
+    database_path = tmp_path / "faria.db"
+    allocation_id = str(uuid4())
+    now = "2099-01-01T00:00:00Z"
+    with sqlite3.connect(database_path) as connection:
+        connection.executescript(script)
+        connection.execute(
+            """
+            CREATE TABLE schema_migrations (
+                version TEXT PRIMARY KEY,
+                checksum TEXT NOT NULL,
+                applied_at TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            "INSERT INTO schema_migrations VALUES ('001', ?, ?)",
+            (hashlib.sha256(script.encode("utf-8")).hexdigest(), now),
+        )
+        connection.execute(
+            """
+            INSERT INTO monthly_allocations (
+                id, period, income_idr, status, created_at, updated_at
+            ) VALUES (?, '2099-01', 1000000, 'DRAFT', ?, ?)
+            """,
+            (allocation_id, now, now),
+        )
+
+    upgraded_database = HouseholdDatabase(database_path)
+    upgraded_database.initialize()
+
+    state = MonthlyAllocationService(upgraded_database).get("2099-01")
+    with upgraded_database.connect() as connection:
+        versions = connection.execute(
+            "SELECT version FROM schema_migrations ORDER BY version"
+        ).fetchall()
+    assert [row["version"] for row in versions] == ["001", "002"]
+    assert state.draft is not None
+    assert state.draft.allocation_id == allocation_id
 
 
 def test_get_separates_non_authoritative_draft_from_confirmed_state(service) -> None:
@@ -137,3 +182,24 @@ def test_draft_can_be_discarded_but_confirmed_allocation_cannot(service) -> None
     confirmed = service.confirm(next_draft.allocation_id)
     with pytest.raises(InvalidAllocationStateError, match="cannot be discarded"):
         service.discard_draft(confirmed.allocation_id)
+
+
+def test_confirming_allocation_creates_no_actual_savings_or_giving_records(database, service) -> None:
+    draft = service.save_draft(
+        "2099-01",
+        1_000_000,
+        [
+            {"category": "savings", "label": "Synthetic Goal", "amount_idr": 300_000},
+            {"category": "zakat", "amount_idr": 25_000},
+            {"category": "sedekah", "amount_idr": 10_000},
+        ],
+    )
+
+    service.confirm(draft.allocation_id)
+
+    with database.connect() as connection:
+        contributions = connection.execute("SELECT COUNT(*) FROM savings_contributions").fetchone()[0]
+        giving = connection.execute("SELECT COUNT(*) FROM giving_records").fetchone()[0]
+
+    assert contributions == 0
+    assert giving == 0

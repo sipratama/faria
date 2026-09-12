@@ -36,6 +36,9 @@ def utc_now() -> str:
 
 
 def _migration_directory() -> Path:
+    package_migrations = Path(__file__).resolve().parent / "migrations"
+    if package_migrations.is_dir():
+        return package_migrations
     return Path(__file__).resolve().parents[2] / "migrations"
 
 
@@ -113,6 +116,22 @@ class HouseholdDatabase:
                 except Exception:
                     connection.rollback()
                     raise
+
+            rules_table_exists = connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'household_financial_rules'"
+            ).fetchone()
+            if rules_table_exists is not None:
+                now = utc_now()
+                connection.execute(
+                    """
+                    INSERT OR IGNORE INTO household_financial_rules (
+                        id, zakat_basis, zakat_rate_basis_points, sedekah_mode,
+                        savings_mode, remainder_policy, created_at, updated_at
+                    ) VALUES (1, 'THP', 250, 'MANUAL', 'GOAL_BASED',
+                              'ASK_ALLOW_UNALLOCATED', ?, ?)
+                    """,
+                    (now, now),
+                )
 
     def get_period_state(self, period: str) -> PeriodAllocationView:
         self.initialize()

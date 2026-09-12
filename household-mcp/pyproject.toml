@@ -22,6 +22,9 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/faria_household_mcp"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"migrations" = "faria_household_mcp/migrations"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = ["--strict-config", "--strict-markers"]

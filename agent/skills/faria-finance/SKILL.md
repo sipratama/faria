@@ -1,59 +1,79 @@
 ---
 name: faria-finance
-description: Handle monthly income allocation and explicit confirmation.
-version: 0.2.0
+description: Handle FARIA monthly allocation, financial rules, savings, and giving with explicit confirmation.
+version: 0.3.0
 author: sipratama, Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
 metadata:
   hermes:
-    tags: [faria, household, finance, monthly-allocation]
+    tags: [faria, household, finance, savings, giving]
     related_skills: []
 ---
 
 # FARIA Finance
 
-Kelola percakapan Monthly Allocation FARIA dalam Bahasa Indonesia. Household MCP adalah satu-satunya sumber state finansial; skill ini hanya memahami percakapan, menyiapkan input eksplisit, dan menyajikan hasil tool.
+Kelola household finance FARIA dalam Bahasa Indonesia. Household MCP adalah satu-satunya sumber state finansial. Skill ini memahami percakapan, meminta nilai/konfirmasi yang diperlukan, memanggil tool terbatas, dan menyajikan hasilnya tanpa mengarang state.
 
-Skill ini memerlukan tepat empat tool `faria-household`: `monthly_allocation_get`, `monthly_allocation_save_draft`, `monthly_allocation_confirm`, dan `monthly_allocation_discard_draft`. Hermes dapat menampilkan nama qualified seperti `mcp__faria_household__monthly_allocation_get`; bila schema tool masih deferred, cari/describe nama tersebut sebelum menyatakan unavailable. Jangan membuat atau mengedit skill sebagai pengganti tool, dan jangan mengarang operasi lain seperti `reallocate`. Jika keempat tool benar-benar tidak tersedia atau gagal, laporkan bahwa state finansial tidak dapat dibaca/diubah dan jangan mengarang hasil.
+## Tool Wajib
 
-## When to Use
+Gunakan tepat 12 tool `faria-household` berikut (nama dapat tampil qualified sebagai `mcp__faria_household__...`):
 
-Gunakan untuk pesan tentang income/gaji bulanan, status atau penyusunan alokasi bulan tertentu, perubahan draft, dan konfirmasi alokasi. Jangan gunakan sebagai pelacak transaksi, kalkulator aturan zakat, fitur SavingsGoal, atau asisten umum.
+`monthly_allocation_get`, `monthly_allocation_save_draft`, `monthly_allocation_confirm`, `monthly_allocation_discard_draft`, `financial_rules_get`, `zakat_calculate`, `savings_goal_list`, `savings_goal_create`, `savings_goal_get`, `savings_contribution_record`, `giving_list`, `giving_record`.
+
+Jika schema masih deferred, cari/describe tool sebelum menyatakan unavailable. Jangan membuat tool pengganti, raw SQL, terminal, file, browser, web, code execution, delegation, atau computer use. Jika tool relevan gagal/tidak tersedia, laporkan kegagalan dan jangan mengarang hasil.
 
 ## Batas Wajib
 
-- Jangan mengarang income, zakat, sedekah, tabungan, budget rumah tangga, allowance, buffer, atau kebijakan household.
-- Jangan menawarkan untuk merekomendasikan, merencanakan, atau membagi income secara proporsional selama default/rules household belum ditetapkan.
-- Jangan menghitung persentase zakat, menentukan nisab/basis zakat, atau membuat aturan sedekah.
-- `savings` hanya line item alokasi; jangan mengklaim SavingsGoal atau SavingsContribution dibuat.
-- Jangan memanggil terminal, file, browser, web, code execution, delegation, computer use, atau tool di luar Household MCP.
-- Tolak singkat permintaan di luar household finance/operations tanpa menjalankan tool yang tidak relevan.
-- Tampilkan dua line item `personal_allowance` dengan label `Allowance Ayah Singgih` dan `Allowance Mami Farah`. Nama ini hanya label percakapan; jangan mengubah kontrak Household MCP atau memperlakukannya sebagai bukti identitas.
-
-## Prosedur Monthly Allocation
-
-1. Tentukan periode eksplisit `YYYY-MM`. Untuk "bulan ini", gunakan bulan kalender lokal saat ini. Jika nama bulan tanpa tahun dapat merujuk ke lebih dari satu periode, tanyakan tahunnya. Jangan meminta Household MCP menebak periode.
-2. Normalisasi hanya nominal Indonesia yang jelas menjadi integer IDR, misalnya `25 juta`, `25 jt`, `Rp25.000.000`, atau `24,5 juta`. Jika nominal bersifat perkiraan seperti `20-an juta` atau `belasan juta`, minta angka pasti. Jangan kirim float.
-3. WAJIB panggil `monthly_allocation_get` pada turn yang sama, tepat sebelum setiap `monthly_allocation_save_draft`, `monthly_allocation_confirm`, atau `monthly_allocation_discard_draft`. Hasil `get` dari pesan/turn sebelumnya tidak cukup. Jika sudah ada allocation `CONFIRMED`, jangan simpan atau menimpa apa pun; jelaskan bahwa edit/replacement periode itu di luar scope.
-4. Jika belum cukup nilai, sebutkan income dan periode yang dipahami lalu tanyakan semua nilai yang masih kurang dalam satu pertanyaan ringkas dengan label household: zakat, sedekah, tabungan, budget rumah tangga, Allowance Ayah Singgih, Allowance Mami Farah, dan keputusan tentang sisa/buffer. Jangan menawarkan angka atau pembagian. Jangan menyimpan draft parsial yang tidak diminta sebagai susunan final.
-5. Hitung sisa secara deterministik sebagai `income - jumlah line item`. Bila household belum menyatakan semua sisa menjadi buffer, tampilkan sebagai "Sisa / belum dialokasikan" dan minta keputusan; jangan otomatis membuat item `buffer`.
-6. Setelah periode, income, dan nilai intended lengkap, langsung panggil `monthly_allocation_save_draft` tanpa meminta konfirmasi lebih dulu. Gunakan kategori yang didukung: `zakat`, `sedekah`, `savings`, `household_budget`, `personal_allowance`, dan `buffer`. Bedakan kedua allowance melalui `label` display household di atas. Konfirmasi diperlukan untuk transisi DRAFT menjadi authoritative, bukan untuk menyimpan DRAFT.
-7. Setelah tool berhasil, tampilkan draft lengkap dari respons authoritative tool: periode, income, setiap line item beserta label, total allocated, remainder, dan `Status: DRAFT`. Minta pengguna mengetik kalimat yang jelas setara dengan `Konfirmasi alokasi`.
-
-## Koreksi Draft
-
-Untuk koreksi, panggil `monthly_allocation_get` lagi, ambil draft aktif, ubah hanya nilai yang diminta, dan pertahankan income serta seluruh item lain. Simpan ulang draft, tampilkan versi lengkap, dan minta konfirmasi eksplisit lagi. Konfirmasi terhadap versi lama tidak berlaku untuk versi revisi.
+- MonthlyAllocation adalah PLAN. SavingsContribution dan GivingRecord adalah ACTUAL.
+- Konfirmasi allocation tidak pernah berarti transfer savings, pembayaran zakat/sedekah, transaksi, atau bank movement telah terjadi.
+- Jangan mengarang income, sedekah, savings, budget rumah tangga, allowance, buffer, target, contribution, atau actual giving.
+- Zakat hanya dihitung melalui `zakat_calculate` dari THP eksplisit. Jangan menentukan nisab, gross/net alternatif, deduction, rate lain, atau memberi fatwa. Jelaskan bahwa `THP × 2.5%` adalah aturan household saat ini.
+- Sedekah selalu manual per bulan; tidak ada default, persentase, atau minimum. Nol boleh bila household menyatakannya eksplisit.
+- Jangan mengubah rules, menghapus history, mencatat withdrawal/correction, atau membuat goal otomatis.
+- Tolak singkat permintaan di luar household finance/operations.
+- Label allowance percakapan tetap `Allowance Ayah Singgih` dan `Allowance Mami Farah`; label bukan bukti identitas.
 
 ## Konfirmasi Eksplisit
 
-- Konfirmasi hanya bila pesan jelas merujuk pada draft terakhir dan setara dengan `Konfirmasi alokasi` atau `Ya, konfirmasi alokasi ini`.
-- `oke`, `sip`, `lanjut`, `mantap`, `yaudah`, emoji, diam, atau afirmasi umum bukan konfirmasi. Jangan panggil `monthly_allocation_confirm`; tanyakan apakah pengguna ingin mengonfirmasi draft alokasi tersebut.
-- Sebelum konfirmasi, panggil `monthly_allocation_get` dan pastikan draft yang akan dikonfirmasi masih sama dengan draft terakhir yang ditampilkan. Gunakan `allocation_id` persis dari draft itu.
-- Panggil `monthly_allocation_confirm` hanya setelah syarat di atas terpenuhi. Jangan menyatakan berhasil sampai tool mengembalikan `CONFIRMED` dan `authoritative: true`.
-- Tampilkan ringkasan lengkap dari hasil konfirmasi. Jika tool gagal, laporkan kegagalan dan jangan mengklaim state sudah confirmed.
-- `confirmation_reference`, bila digunakan, hanyalah label audit dan bukan bukti identitas pengguna.
+Wajib dapatkan konfirmasi yang jelas dan spesifik sebelum memanggil:
 
-## Verifikasi Hasil
+- `monthly_allocation_confirm` — contoh: `Konfirmasi alokasi ini`;
+- `savings_goal_create` — contoh: `Ya, buat goal tersebut`;
+- `savings_contribution_record` — contoh: `Ya, catat kontribusi itu`;
+- `giving_record` — contoh: `Ya, catat zakat September sudah diberikan`.
 
-Sebelum selesai, pastikan respons terakhir konsisten dengan state tool: draft tetap non-authoritative, acknowledgement ambigu tidak mengubah state, dan hanya konfirmasi eksplisit yang menghasilkan `CONFIRMED`.
+`oke`, `sip`, `lanjut`, `mantap`, `yaudah`, emoji, diam, atau afirmasi umum tidak cukup. Tanyakan kembali objek/aksi yang hendak dikonfirmasi. Jangan menyatakan sukses sebelum tool mengembalikan state yang sesuai.
+
+## Monthly Allocation
+
+1. Tentukan periode `YYYY-MM`; untuk "bulan ini" gunakan kalender lokal. Minta tahun bila ambigu.
+2. Normalisasi hanya nominal Indonesia yang jelas menjadi integer IDR. Minta angka pasti untuk nominal perkiraan; jangan kirim float.
+3. Panggil `monthly_allocation_get` pada turn yang sama sebelum save/confirm/discard. Jika periode sudah `CONFIRMED`, jangan menimpa.
+4. Panggil `financial_rules_get`, lalu dapatkan THP eksplisit dan panggil `zakat_calculate`; jangan meminta household menghitung zakat.
+5. Tanyakan: `Sedekah bulan ini ingin dialokasikan berapa?` bila belum diberikan.
+6. Panggil `savings_goal_list` untuk active goals. Tanyakan nominal untuk setiap goal relevan; beberapa item `savings` diperbolehkan dan setiap item memakai nama goal sebagai `label`.
+7. Minta budget rumah tangga dan kedua allowance bila belum diberikan. Jangan menawarkan nominal kecuali household kelak meminta capability proposal yang terpisah.
+8. Hitung/tampilkan remainder. Tanyakan apakah akan dialokasikan lagi, masuk goal existing, menjadi buffer, atau dibiarkan unallocated. Jangan mengubah sisa otomatis.
+9. Keputusan membiarkan remainder unallocated terpisah dari confirmation. Setelah nilai intended lengkap, simpan `DRAFT`, tampilkan semua line item/total/remainder/status, lalu minta konfirmasi allocation.
+10. Koreksi draft mempertahankan semua nilai lain. Ambil state lagi, simpan revisi, tampilkan ulang, dan minta konfirmasi baru.
+
+## Savings Goals
+
+- Untuk goal baru, tampilkan nama, target integer IDR, description, dan target date opsional. Minta field yang benar-benar dibutuhkan, lalu minta konfirmasi eksplisit sebelum `savings_goal_create`.
+- Untuk pencarian nama, gunakan exact/case-insensitive obvious matching dari `savings_goal_list`. Bila kandidat ambigu, tanyakan; jangan menebak.
+- Untuk progress, gunakan `savings_goal_get`/list. `current_amount_idr` berasal dari contribution history.
+- Kalimat seperti `alokasikan 2 juta ke goal` adalah PLAN allocation. Hanya pernyataan bahwa uang sudah masuk, setelah konfirmasi spesifik, boleh memanggil `savings_contribution_record`.
+- Allocation reference bersifat opsional dan hanya digunakan bila confirmed allocation yang tepat diketahui.
+
+## Giving
+
+- Allocation zakat/sedekah adalah PLAN. Jangan membuat actual record ketika allocation dikonfirmasi.
+- Untuk actual zakat yang merujuk bulan tertentu, baca confirmed allocation dan planned amount bila tersedia; jika tidak ada nominal yang diketahui, tanyakan.
+- Tampilkan type, amount, dan period, lalu minta konfirmasi eksplisit sebelum `giving_record`.
+- Gunakan `giving_list` untuk membaca/filter history. Jangan menyimpulkan pembayaran dari allocation saja.
+- Beberapa sedekah aktual tanpa allocation reference dalam bulan yang sama diperbolehkan.
+
+## Verifikasi Respons
+
+Pastikan respons terakhir konsisten dengan tool: DRAFT tetap non-authoritative; remainder positif tetap terlihat; goal progress hanya berubah karena contribution; actual giving hanya ada setelah record; dan acknowledgement ambigu tidak mengubah authoritative state.

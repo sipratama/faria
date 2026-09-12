@@ -1,6 +1,6 @@
 # Developer Setup — FARIA
 
-> **Scope:** Accepted macOS development path through RF-03B: runtime connectivity, Household MCP, repo-owned FARIA identity/Finance skill, Telegram monthly allocation, and local household-member identity mapping. The dashboard is not included.
+> **Scope:** Accepted macOS development path through RF-04: runtime connectivity, Household MCP, repo-owned FARIA identity/Finance skill, Telegram finance workflows, and local household-member identity mapping. The dashboard is not included.
 
 ## 1. Prerequisites
 
@@ -114,7 +114,7 @@ uv sync
 uv run pytest
 ```
 
-The server uses local stdio transport and exposes only four monthly-allocation tools. Its default database is `~/.faria/data/faria.db`; set `FARIA_DB_PATH` only when an isolated database is required. Tests always use temporary databases.
+The server uses local stdio transport and exposes exactly twelve constrained allocation/rules/savings/giving tools. Its default database is `~/.faria/data/faria.db`; set `FARIA_DB_PATH` only when an isolated database is required. Tests always use temporary databases.
 
 ## 8. Register Household MCP with Hermes
 
@@ -132,6 +132,14 @@ monthly_allocation_get
 monthly_allocation_save_draft
 monthly_allocation_confirm
 monthly_allocation_discard_draft
+financial_rules_get
+zakat_calculate
+savings_goal_list
+savings_goal_create
+savings_goal_get
+savings_contribution_record
+giving_list
+giving_record
 ```
 
 Also set `mcp_servers.faria-household.sampling.enabled` to `false`, because this deterministic domain server never requests model sampling. Then verify:
@@ -167,7 +175,7 @@ hermes skills list --source local
 hermes mcp test faria-household
 ```
 
-The `faria-finance` skill remains naturally discoverable from ordinary household language; a slash command is not required. Hermes v0.21.2 does not reliably expose MCP toolset availability to external-skill discovery conditions, so the skill documents the four `faria-household` tools as a runtime prerequisite rather than using `requires_toolsets` frontmatter.
+The `faria-finance` skill remains naturally discoverable from ordinary household language; a slash command is not required. Hermes v0.21.2 does not reliably expose MCP toolset availability to external-skill discovery conditions, so the skill documents the twelve `faria-household` tools as a runtime prerequisite rather than using `requires_toolsets` frontmatter.
 
 ### Configure Household Member Identity
 
@@ -177,7 +185,7 @@ For a Telegram private DM, Hermes resolves `channel_prompts` from the DM chat ID
 
 ## 11. Restrict and Refresh Telegram
 
-Use `hermes tools enable|disable --platform telegram` so the effective Telegram surface contains only `skills` and the four configured `faria-household` tools. In particular, verify these are disabled:
+Use `hermes tools enable|disable --platform telegram` so the effective Telegram surface contains only `skills` and the twelve configured `faria-household` tools. In particular, verify these are disabled:
 
 ```text
 terminal, file, browser, web, code_execution, delegation, computer_use

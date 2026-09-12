@@ -12,9 +12,9 @@
 |---|---|
 | Product | FARIA |
 | Status | Draft |
-| Version | `0.1` |
+| Version | `0.2` |
 | Owner | sipratama |
-| Last Updated | `2026-09-11` |
+| Last Updated | `2026-09-12` |
 | Target Release / Phase | V1 — personal MVP |
 
 ---
@@ -98,12 +98,12 @@ Progress savings yang terlihat dan dapat dipercaya.
 P0
 
 **Related Feature Specs**
-- TBD — belum dibuat; lihat Product Brief MVP Boundary.
+- `../01_features/savings-goals.md`
 
 ### CAP-GIVE-001 — Zakat & Sedekah
 
 **Description**
-Household dapat mencatat zakat penghasilan dan sedekah sebagai recurring allocation bulanan yang terpisah, dengan aturan/nominal yang dapat dikonfigurasi, bukan di-hardcode.
+Household dapat menghitung zakat penghasilan dari aturan household `THP × 2.5%`, menentukan sedekah secara manual setiap bulan, dan mencatat fulfillment aktual secara terpisah dari allocation plan.
 
 **User Outcome**
 Zakat dan sedekah tidak pernah terlewat diam-diam.
@@ -112,7 +112,7 @@ Zakat dan sedekah tidak pernah terlewat diam-diam.
 P0
 
 **Related Feature Specs**
-- TBD.
+- `../01_features/giving.md`
 
 ### CAP-BUDGET-001 — Household Operating Budget
 
@@ -253,7 +253,9 @@ Telegram: "Tambahkan 3 juta ke dana darurat"
    ↓
 Hermes mengenali intent savings-contribution
    ↓
-Household MCP: record_savings_contribution
+FARIA meminta konfirmasi eksplisit
+   ↓
+Household MCP: savings_contribution_record
    ↓
 FARIA mengonfirmasi progress baru
 ```
@@ -363,7 +365,7 @@ Canonical metrics: `./PRODUCT_BRIEF.md#11-success-metrics`
 
 ### Can Be Deferred
 
-- `CAP-SAVE-001`, `CAP-GIVE-001`, `CAP-BUDGET-001`, `CAP-ALLOW-001`, `CAP-ROUTINE-001`, `CAP-DASH-001` (dashboard dapat dimulai read-only/minimal)
+- `CAP-BUDGET-001`, `CAP-ALLOW-001`, `CAP-ROUTINE-001`, `CAP-DASH-001` (dashboard dapat dimulai read-only/minimal)
 
 ### Product Release Blockers
 
@@ -378,7 +380,7 @@ Release belum product-complete jika:
 
 | Dependency | Needed For | Risk | Status |
 |---|---|---|---|
-| Implementasi Household MCP server | CAP-ALLOC-001 dan semua capability yang mengubah state | High | Open |
+| Implementasi Household MCP server | CAP-ALLOC-001, CAP-SAVE-001, dan CAP-GIVE-001 | High | Implemented locally through RF-04 |
 | Konfigurasi allowlist Telegram | CAP-CHAT-001 | Medium | Open |
 | Akses 9Router/OpenRouter | Semua capability percakapan | Medium | Open |
 
@@ -388,8 +390,8 @@ Release belum product-complete jika:
 
 | ID | Decision / Question | Owner | Blocking? | Target |
 |---|---|---|---:|---|
-| PD-01 | Formula/aturan alokasi zakat penghasilan yang tepat | Household | Yes | Sebelum alokasi zakat pertama dikonfirmasi |
-| PD-02 | Aturan/nominal sedekah bulanan yang berulang | Household | Yes | Sebelum alokasi sedekah pertama dikonfirmasi |
+| PD-01 | RESOLVED — aturan household adalah THP × 2.5% (250 basis points), bukan nasihat agama universal | Household | No | RF-04 |
+| PD-02 | RESOLVED — sedekah ditentukan manual setiap bulan; FARIA tidak membuat default/percentage | Household | No | RF-04 |
 | PD-03 | Hosting provider final | Household | No | Sebelum deployment |
 
 ---
@@ -399,6 +401,8 @@ Release belum product-complete jika:
 | Feature | Spec | Status | Related Capability |
 |---|---|---|---|
 | Monthly Allocation | `../01_features/monthly-allocation.md` | Draft | `CAP-ALLOC-001` |
+| Savings Goals | `../01_features/savings-goals.md` | Draft | `CAP-SAVE-001` |
+| Giving | `../01_features/giving.md` | Draft | `CAP-GIVE-001` |
 
 ---
 

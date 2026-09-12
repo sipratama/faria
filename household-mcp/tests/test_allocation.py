@@ -93,3 +93,33 @@ def test_saving_again_updates_the_current_draft(service) -> None:
     assert updated.income_idr == 2_000_000
     assert updated.items[0].amount_idr == 250_000
     assert updated.remainder_idr == 1_750_000
+
+
+def test_multiple_savings_items_can_represent_separate_goal_allocations(service) -> None:
+    draft = service.save_draft(
+        "2099-01",
+        2_000_000,
+        [
+            {"category": "savings", "label": "Synthetic Goal A", "amount_idr": 400_000},
+            {"category": "savings", "label": "Synthetic Goal B", "amount_idr": 600_000},
+        ],
+    )
+
+    assert [(item.category, item.label) for item in draft.items] == [
+        ("savings", "Synthetic Goal A"),
+        ("savings", "Synthetic Goal B"),
+    ]
+
+
+def test_positive_remainder_can_be_confirmed_without_a_buffer_item(service) -> None:
+    draft = service.save_draft(
+        "2099-01",
+        1_000_000,
+        [{"category": "household_budget", "amount_idr": 600_000}],
+    )
+
+    confirmed = service.confirm(draft.allocation_id, "explicit-unallocated-remainder")
+
+    assert confirmed.status == "CONFIRMED"
+    assert confirmed.remainder_idr == 400_000
+    assert all(item.category != "buffer" for item in confirmed.items)

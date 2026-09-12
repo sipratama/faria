@@ -12,7 +12,7 @@
 |---|---|
 | Project | FARIA |
 | Status | Draft |
-| Version | `0.3` |
+| Version | `0.4` |
 | Owner | sipratama |
 | Last Updated | `2026-09-12` |
 
@@ -35,7 +35,7 @@
 | Domain / Module | Owned Data | Write Authority | Notes |
 |---|---|---|---|
 | Household Core | Household, Member | Household MCP | Shared context for both spouses |
-| Finance | MonthlyAllocation, AllocationItem | Household MCP | |
+| Finance | HouseholdFinancialRules, MonthlyAllocation, AllocationItem | Household MCP | Rules are a single-household singleton |
 | Savings | SavingsGoal, SavingsContribution | Household MCP | |
 | Giving | GivingRecord | Household MCP | Zakat penghasilan + sedekah |
 | Home Ops | HouseholdRoutine | Household MCP | Reminders/maintenance |
@@ -49,6 +49,8 @@ Ownership means the component authorized to define and mutate authoritative stat
 
 ```text
 Household 1 -------- * Member
+    |
+    * HouseholdFinancialRules (exactly one active row)
     |
     | 1
     |
@@ -68,6 +70,8 @@ Household 1 -------- * Member
 ## 4. Entity Catalog
 
 ### Household
+
+> Conceptual V1 entity only. RF-04 intentionally does not create a `households` table because the deployed system serves exactly one household.
 
 **Purpose**
 Represents the single household using FARIA (V1 supports exactly one).
@@ -101,6 +105,8 @@ Not deleted in normal operation; the household owns its own data.
 
 ### Member
 
+> Conceptual V1 entity only. Telegram allowlist/member identity remains Hermes-managed runtime configuration; RF-04 does not create a `members` table.
+
 **Purpose**
 Represents a household participant (household owner or spouse).
 
@@ -129,6 +135,25 @@ Internal identifier + Telegram identity reference.
 
 **Deletion / Retention**
 Not deleted in normal operation.
+
+---
+
+### HouseholdFinancialRules
+
+**Purpose**
+Stores the single authoritative household-selected finance rule set used by deterministic tools and Finance orchestration.
+
+**Key Attributes and Invariants**
+
+| Attribute | RF-04 value |
+|---|---|
+| zakat_basis | `THP` |
+| zakat_rate_basis_points | `250` |
+| sedekah_mode | `MANUAL` |
+| savings_mode | `GOAL_BASED` |
+| remainder_policy | `ASK_ALLOW_UNALLOCATED` |
+
+Exactly one row (`id = 1`) is initialized idempotently. RF-04 exposes reads/calculation only; later rule changes require a separate explicit-confirmation workflow.
 
 ---
 
@@ -197,6 +222,8 @@ Tied to parent MonthlyAllocation's lifecycle.
 **Invariants**
 - Amounts are non-negative.
 - The sum of AllocationItem amounts must not exceed the period's `income_idr`; buffer is an ordinary supported item category.
+- Multiple `savings` items are allowed and use `label` to express goal intent.
+- An item is PLAN only; it never proves an actual savings contribution or giving fulfillment.
 
 **Deletion / Retention**
 Tied to parent MonthlyAllocation.
@@ -222,16 +249,18 @@ Internal identifier.
 | Attribute | Meaning | Required? | Sensitive? |
 |---|---|---:|---:|
 | name | Goal name | Yes | No |
-| target_amount | Target nominal | Yes | Yes |
-| current_amount | Current progress | Yes | Yes |
+| description | Optional short explanation | No | No |
+| target_amount_idr | Target nominal in integer IDR | Yes | Yes |
+| current_amount_idr | Derived contribution total | Yes | Yes |
 | target_date | Optional target date | No | No |
-| recurring_contribution | Optional recurring contribution amount | No | Yes |
+| status | Active / Completed / Archived | Yes | No |
 
 **Relationships**
 - Has many SavingsContribution. Belongs to one Household.
 
 **Invariants**
-- `current_amount` is derived from/consistent with the sum of its SavingsContribution records.
+- `current_amount_idr` is derived from the sum of its SavingsContribution records.
+- A new goal starts Active and becomes Completed when contributions meet or exceed target; completion does not automatically archive it.
 
 **Deletion / Retention**
 Not deleted in normal operation; may be archived once no longer relevant.
@@ -256,15 +285,17 @@ Internal identifier.
 
 | Attribute | Meaning | Required? | Sensitive? |
 |---|---|---:|---:|
-| amount | Contribution amount | Yes | Yes |
+| amount_idr | Positive contribution amount in integer IDR | Yes | Yes |
 | recorded_at | Timestamp | Yes | No |
 | source_allocation_reference | Optional link to the MonthlyAllocation it came from | No | No |
+| note | Optional audit note | No | No |
 
 **Relationships**
 - Belongs to one SavingsGoal.
 
 **Invariants**
 - `amount` is positive.
+- A source allocation reference, when supplied, must identify a Confirmed allocation; linked retries are idempotent per goal/reference.
 
 **Deletion / Retention**
 Not deleted in normal operation (financial history).
@@ -293,12 +324,16 @@ Internal identifier.
 | amount | Nominal amount | Yes | Yes |
 | period | Related allocation period | Yes | No |
 | recorded_at | Timestamp | Yes | No |
+| monthly_allocation_reference | Optional Confirmed allocation fulfilled by this record | No | No |
+| note | Optional audit note | No | No |
 
 **Relationships**
 - Belongs to one Household; may reference the MonthlyAllocation it fulfills.
 
 **Invariants**
 - `type` must be one of `zakat_penghasilan` or `sedekah` — they remain distinct records even when both relate to the same period (see Product Brief: Sedekah must remain distinct from Zakat Penghasilan).
+- A referenced allocation must be Confirmed and match the record period.
+- Linked retries are unique per period/type/allocation reference; unreferenced repeated sedekah remains allowed.
 
 **Deletion / Retention**
 Not deleted in normal operation.
@@ -379,6 +414,7 @@ May be pruned/rotated once the dashboard no longer needs old entries (retention 
 | Aggregate | Root | Members | Invariants Requiring Atomicity |
 |---|---|---|---|
 | MonthlyAllocation | MonthlyAllocation | AllocationItem(s) | Confirming an allocation must atomically persist the allocation and all its items together. |
+| SavingsGoal | SavingsGoal | SavingsContribution(s) | Appending a contribution and completing a reached goal happen atomically. |
 
 ---
 
@@ -386,6 +422,7 @@ May be pruned/rotated once the dashboard no longer needs old entries (retention 
 
 | From | Relationship | To | Cardinality | Ownership Meaning |
 |---|---|---|---|---|
+| Single-household runtime | owns | HouseholdFinancialRules | 1:1 | Authoritative singleton configuration |
 | Household | has | Member | 1:N | Lifecycle ownership |
 | Household | has | MonthlyAllocation | 1:N | Lifecycle ownership |
 | MonthlyAllocation | has | AllocationItem | 1:N | Lifecycle ownership |
@@ -427,7 +464,9 @@ See `docs/01_features/monthly-allocation.md`, Section 6, for MonthlyAllocation s
 
 | Entity | Identifier | Generated By | Externally Exposed? |
 |---|---|---|---:|
-| All entities in this catalog | UUID (recommended) | Household MCP | No — internal use only for V1 |
+| HouseholdFinancialRules | Fixed singleton key `1` | Migration/bootstrap | No |
+| MonthlyAllocation, AllocationItem, SavingsGoal, SavingsContribution, GivingRecord | UUID | Household MCP | Exposed only through private MCP responses |
+| Deferred conceptual entities | UUID recommended when implemented | Household MCP | No |
 
 ### Rules
 
@@ -441,7 +480,7 @@ See `docs/01_features/monthly-allocation.md`, Section 6, for MonthlyAllocation s
 | Concern | Strategy |
 |---|---|
 | Created timestamp | Every entity has a `created_at` |
-| Updated timestamp | Mutable entities (e.g. `SavingsGoal.current_amount`) have an `updated_at` |
+| Updated timestamp | Mutable entities (e.g. SavingsGoal status) have an `updated_at` |
 | Actor / changed by | RF-02 may store `MonthlyAllocation.confirmation_reference` as audit-only metadata; trustworthy per-user attribution is deferred until identity propagation exists |
 | History | Append-only `SavingsContribution` and `GivingRecord` entries serve as history; no separate audit table is planned for V1 |
 | Soft delete | Not used for V1 — `HouseholdRoutine` deletion is a hard delete; financial records are not deleted |
@@ -476,7 +515,9 @@ FARIA explicitly does not collect personal allowance spend detail (see Product B
 | Domain Data | Store | Persistence Model | Notes |
 |---|---|---|---|
 | MonthlyAllocation, AllocationItem | SQLite | `monthly_allocations`, `allocation_items` | Implemented by `household-mcp/migrations/001_monthly_allocation.sql` |
-| Household, Member, SavingsGoal, SavingsContribution, GivingRecord, HouseholdRoutine, AgentActivity | SQLite | Not implemented | Deferred until the owning feature is activated |
+| HouseholdFinancialRules, SavingsGoal, SavingsContribution, GivingRecord | SQLite | `household_financial_rules`, `savings_goals`, `savings_contributions`, `giving_records` | Implemented by `household-mcp/migrations/002_financial_rules_savings_giving.sql` |
+| Household, Member | Runtime-local/conceptual | No tables in RF-04 | Single-household and Hermes-managed identity by design |
+| HouseholdRoutine, AgentActivity | SQLite | Not implemented | Deferred until the owning feature is activated |
 
 ---
 
@@ -488,8 +529,12 @@ FARIA explicitly does not collect personal allowance spend detail (see Product B
 | At most one Confirmed MonthlyAllocation per period (single household V1) | Application + SQLite partial unique index |
 | At most one active Draft MonthlyAllocation per period | Application + SQLite partial unique index |
 | Draft/Discarded rows cannot carry confirmation metadata | DB check constraint |
+| Exactly one default household financial-rules row is initialized without overwriting existing data | Singleton check + idempotent bootstrap |
+| SavingsGoal target is positive and non-archived names are case-insensitively unique | Application + DB constraints/index |
 | SavingsContribution.amount is positive | Application + DB constraint |
+| SavingsContribution and GivingRecord history cannot be updated/deleted | SQLite immutability triggers; no mutation/delete tools |
 | GivingRecord.type is one of a fixed enum (`zakat_penghasilan`, `sedekah`) | Application + DB constraint |
+| Linked contribution/giving retries do not duplicate ACTUAL history | Partial unique indexes + application conflict checks |
 
 ---
 
@@ -499,6 +544,7 @@ FARIA explicitly does not collect personal allowance spend detail (see Product B
 |---|---|---:|---|
 | Get current Draft/Confirmed MonthlyAllocation for a period | MonthlyAllocation | Single household, low volume | Index on `(period, status)`; no synthetic tenant/household column in RF-02 |
 | Get SavingsGoal progress | SavingsGoal + SavingsContribution | Single household, low volume | Index on `(goal_id)` for contributions |
+| Filter GivingRecord by period/type | GivingRecord | Single household, low volume | Index on `(period, type, recorded_at)` |
 
 ---
 
@@ -578,6 +624,7 @@ Material persistence decisions should become ADRs when resolved.
 
 | Version | Date | Change | Author |
 |---|---|---|---|
+| 0.4 | `2026-09-12` | Added RF-04 authoritative financial rules, savings goals/contributions, giving records, and PLAN-versus-ACTUAL invariants | sipratama |
 | 0.3 | `2026-09-12` | Aligned MonthlyAllocation/AllocationItem with the RF-02 SQLite schema and migration strategy | sipratama |
 | 0.2 | `2026-09-12` | Aligned the AgentActivity model alias example with the verified 9Router combo | sipratama |
 | 0.1 | `2026-09-11` | Initial draft | sipratama |

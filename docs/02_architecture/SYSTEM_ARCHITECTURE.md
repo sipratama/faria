@@ -12,7 +12,7 @@
 |---|---|
 | Project | FARIA |
 | Status | Draft |
-| Version | `0.4` |
+| Version | `0.6` |
 | Architecture Owner | sipratama |
 | Last Updated | `2026-09-12` |
 
@@ -150,7 +150,7 @@ Docker isolates Hermes terminal/tool execution and runs 9Router; it does not hos
 
 | Component | Responsibility | Technology | Current / Planned Execution Unit |
 |---|---|---|---|
-| Household MCP (RF-02 implemented locally) | Four constrained monthly-allocation tools over stdio | Python 3.11, official MCP SDK, stdlib SQLite | Hermes-managed local stdio process; production unit TBD |
+| Household MCP (through RF-04 implemented locally) | Twelve constrained allocation/rules/savings/giving tools over stdio | Python 3.11, official MCP SDK, stdlib SQLite | Hermes-managed local stdio process; production unit TBD |
 | Dashboard | Agent Control Center web UI | React / Next.js | TBD before deployment |
 | SQLite | Authoritative structured data | SQLite file | Host/volume and backup mechanism TBD before production use |
 
@@ -184,8 +184,8 @@ Exact component structure and client-state-management choices are not fixed yet 
 
 | Module | Responsibility | Owns Data? | May Depend On |
 |---|---|---:|---|
-| Finance Agent (repo skill: `agent/skills/faria-finance/`) | Monthly allocation, household budget, personal allowances | No | Household MCP |
-| Giving Agent (skill) | Zakat penghasilan, sedekah | No | Household MCP |
+| Finance Agent (repo skill: `agent/skills/faria-finance/`) | Monthly allocation, financial rules, savings goals/contributions, zakat, sedekah | No | Household MCP |
+| Giving Agent (logical persona; currently covered by Finance skill) | Zakat penghasilan, sedekah | No | Household MCP |
 | Home Ops Agent (skill) | Routines, maintenance, reminders | No | Household MCP |
 | Planner Agent (skill) | Cross-cutting scheduling/summary | No | Household MCP, other skills |
 | Household MCP | All of the above domain state | Yes | SQLite |
@@ -216,7 +216,8 @@ Household MCP owns all authoritative household domain state (allocations, saving
 
 | Data / Aggregate | Owning Module | Authoritative Store |
 |---|---|---|
-| Household / Member profile | Household MCP | SQLite |
+| Household / Member profile | Hermes runtime configuration in RF-03B; conceptual Household MCP domain later | No SQLite table yet |
+| HouseholdFinancialRules | Household MCP | SQLite |
 | MonthlyAllocation / AllocationItem | Household MCP | SQLite |
 | SavingsGoal / SavingsContribution | Household MCP | SQLite |
 | GivingRecord (zakat/sedekah) | Household MCP | SQLite |
@@ -267,18 +268,19 @@ Household MCP tools (constrained, function-call-style interface for the LLM — 
 
 ### Contract Source
 
-RF-02 exposes exactly `monthly_allocation_get`, `monthly_allocation_save_draft`, `monthly_allocation_confirm`, and `monthly_allocation_discard_draft`. The feature specification owns their behavior. Later domain tools are added only with their corresponding feature implementation.
+RF-04 exposes exactly twelve tools: four `monthly_allocation_*` tools plus `financial_rules_get`, `zakat_calculate`, `savings_goal_list`, `savings_goal_create`, `savings_goal_get`, `savings_contribution_record`, `giving_list`, and `giving_record`. The three finance feature specifications own their behavior.
 
 ### API Principles
 
 - the LLM never receives raw SQL or shell access;
 - every state-changing tool call is scoped to one domain operation;
 - draft writes may persist non-authoritative working state;
-- material financial changes require an explicit prior human confirmation step (PRD PR-001) before `monthly_allocation_confirm` makes the allocation authoritative.
+- material financial changes require an explicit prior human confirmation step before allocation confirmation, savings-goal creation, contribution recording, or giving recording;
+- MonthlyAllocation is PLAN only; its confirmation has no automatic SavingsContribution/GivingRecord side effect.
 
 ### Error Model
 
-RF-02 distinguishes validation, not-found, invalid-state, and period-conflict failures. MCP callers must treat tool errors as failed operations and must not claim persistence succeeded.
+Household MCP distinguishes validation, not-found, invalid-state, and conflict failures. MCP callers must treat tool errors as failed operations and must not claim persistence succeeded.
 
 ---
 
@@ -300,7 +302,7 @@ Ownership-based — both allowlisted household members have full access to the s
 
 ### Enforcement Boundary
 
-The allowlist check happens before Hermes processes a Telegram message. Household MCP additionally scopes every call to four allowed domain operations and enforces validation/state invariants. The current stdio MCP transport does not provide trustworthy per-Telegram-user identity to Household MCP, so an actor/reference supplied to a tool is audit-only and is not an authentication boundary.
+The allowlist check happens before Hermes processes a Telegram message. Household MCP additionally scopes every call to twelve allowed domain operations and enforces validation/state invariants. The current stdio MCP transport does not provide trustworthy per-Telegram-user identity to Household MCP, so an actor/reference supplied to a tool is audit-only and is not an authentication boundary.
 
 ### Identity Flow
 
@@ -348,8 +350,8 @@ SQLite / Backup
 - only allowlisted Telegram identities are processed;
 - household display aliases are personalization only: current-speaker context is injected from a local Telegram DM mapping after authorization, and message text, Telegram display names, or usernames cannot override it;
 - the LLM never receives raw SQL access to authoritative household state; authoritative reads/writes use only Household MCP's constrained tools;
-- the household Telegram surface exposes only the repo-owned Finance skill (plus Hermes' non-disableable operating skill) and the four allowlisted `faria-household` MCP tools; terminal, file, browser, web, code execution, delegation, and computer-use toolsets remain unavailable there, while the developer CLI is configured separately;
-- material financial state changes require explicit human confirmation before becoming authoritative; Household MCP enforces that only its confirm transition can make a draft authoritative, while Hermes/orchestration remains responsible for interpreting the human confirmation;
+- the household Telegram surface exposes only the repo-owned Finance skill (plus Hermes' non-disableable operating skill) and the twelve allowlisted `faria-household` MCP tools; terminal, file, browser, web, code execution, delegation, and computer-use toolsets remain unavailable there, while the developer CLI is configured separately;
+- material financial state changes require explicit human confirmation before becoming authoritative; Household MCP constrains state transitions while Hermes/orchestration remains responsible for interpreting confirmation before calling confirm/create/record tools;
 - 9Router and Household MCP are not publicly exposed beyond what Hermes/dashboard need;
 - privileged/state-changing Household MCP calls should be auditable (who/when/what).
 
@@ -371,11 +373,11 @@ Hermes → 9Router → OpenRouter calls must have explicit timeout behavior (exa
 
 ### Retries
 
-Safe to retry read-only Household MCP calls such as `monthly_allocation_get`. Repeating `monthly_allocation_confirm` for the same allocation is idempotent; confirming a different draft after the period already has a Confirmed allocation fails without overwriting it.
+Read-only tools are safe to retry. Repeating `monthly_allocation_confirm` for the same allocation is idempotent. Contribution/giving retries linked to the same allocation reference return the existing record when the amount matches and fail on conflicting amounts.
 
 ### Idempotency
 
-Confirming the same allocation twice for the same period must not create duplicate authoritative records (see `docs/01_features/monthly-allocation.md`, BR-03).
+Confirming the same allocation twice must not create duplicate authoritative records. Linked ACTUAL savings/giving retries are protected by database uniqueness plus application conflict handling.
 
 ### Partial Failure
 
@@ -537,6 +539,7 @@ Do not update this document for routine internal refactoring that preserves the 
 
 | Version | Date | Change | Author |
 |---|---|---|---|
+| 0.6 | `2026-09-12` | Added RF-04 financial rules, savings/giving persistence, twelve-tool boundary, and PLAN-versus-ACTUAL semantics | sipratama |
 | 0.5 | `2026-09-12` | Added local Telegram DM member-context mapping and separated display identity from authorization | sipratama |
 | 0.4 | `2026-09-12` | Added the repo-owned FARIA identity/Finance skill and restricted Telegram tool/skill surface from RF-03 | sipratama |
 | 0.3 | `2026-09-12` | Recorded the RF-02 Household MCP, SQLite migration strategy, tool surface, and confirmation/identity boundaries | sipratama |

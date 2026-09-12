@@ -55,7 +55,7 @@ Household dapat menyatakan income sekali lewat Telegram dan mendapatkan alokasi 
 ### In Scope
 
 - Mencatat income bulanan.
-- Menghasilkan draft allocation dari household allocation rules saat ini.
+- Menghasilkan draft allocation dari authoritative household financial rules dan nilai manual household.
 - Menampilkan draft ke user.
 - Langkah konfirmasi eksplisit.
 - Persisting allocation yang terkonfirmasi.
@@ -63,8 +63,8 @@ Household dapat menyatakan income sekali lewat Telegram dan mendapatkan alokasi 
 
 ### Out of Scope
 
-- Kalkulasi otomatis formula zakat penghasilan yang tepat (rule dikonfigurasi household, bukan diciptakan sistem).
 - Transfer uang / pembayaran otomatis.
+- Membuat SavingsContribution atau GivingRecord ketika allocation dikonfirmasi.
 - Pencatatan level-transaksi di dalam bucket allocation manapun.
 - Mengedit allocation yang sudah terkonfirmasi (di luar scope V1 — perlakukan sebagai periode baru).
 
@@ -99,14 +99,16 @@ Dashboard merefleksikan state terbaru
 
 1. User mengirim pesan Telegram yang menyatakan income bulanan.
 2. Hermes mengenali intent monthly-allocation.
-3. Hermes menentukan periode yang dimaksud dan memanggil Household MCP dengan periode `YYYY-MM` eksplisit untuk mengambil state saat ini.
-4. Hermes membuat dan menyimpan DRAFT allocation (persisted untuk dilanjutkan/review, tetapi belum authoritative).
-5. Hermes menampilkan proposed allocation ke user untuk direview.
-6. User mengonfirmasi secara eksplisit (atau meminta perubahan).
-7. Hermes memanggil `monthly_allocation_confirm` setelah orchestration layer menetapkan bahwa user sudah mengonfirmasi secara eksplisit.
-8. Household MCP secara atomik mengubah draft yang tersimpan menjadi Confirmed di SQLite.
-9. FARIA merespons dengan ringkasan yang terkonfirmasi.
-10. Dashboard merefleksikan update household state/agent activity.
+3. Hermes menentukan periode, mengambil financial rules dan allocation state, lalu menghitung zakat melalui `zakat_calculate` dari THP eksplisit.
+4. Hermes meminta sedekah manual, mengambil active savings goals, dan meminta nominal budget/allowance/savings yang belum diberikan.
+5. Hermes menampilkan remainder dan meminta keputusan terpisah untuk mengalokasikan atau membiarkannya unallocated.
+6. Hermes membuat dan menyimpan DRAFT allocation (persisted untuk dilanjutkan/review, tetapi belum authoritative).
+7. Hermes menampilkan proposed allocation ke user untuk direview.
+8. User mengonfirmasi secara eksplisit (atau meminta perubahan).
+9. Hermes memanggil `monthly_allocation_confirm` setelah orchestration layer menetapkan bahwa user sudah mengonfirmasi secara eksplisit.
+10. Household MCP secara atomik mengubah draft yang tersimpan menjadi Confirmed di SQLite tanpa membuat ACTUAL records.
+11. FARIA merespons dengan ringkasan yang terkonfirmasi.
+12. Dashboard reflection tetap deferred.
 
 ### Alternate Flow — AF-01 (User meminta koreksi sebelum konfirmasi)
 
@@ -148,7 +150,9 @@ Household tidak seharusnya menghitung ulang setiap bucket secara manual setiap b
 
 **Acceptance Criteria**
 
-- Given income bulanan dan seluruh nilai intended telah diberikan, when Hermes menghasilkan draft, then draft mencakup line item zakat, sedekah, savings, household budget, dan allowance.
+- Given THP bulanan, when Hermes menghasilkan draft, then zakat dihitung oleh Household MCP sebagai THP × 2.5% dengan integer IDR dan ROUND_HALF_UP.
+- Given sedekah belum diberikan, when Hermes melengkapi draft, then FARIA meminta nominal manual dan tidak mengarang angka; nol diperbolehkan bila eksplisit.
+- Given active savings goals ada, when Hermes melengkapi draft, then household dapat memberi beberapa line item `savings` dengan label goal masing-masing.
 - Given dua line item personal allowance ditampilkan, when Hermes menyajikan draft, then label percakapannya adalah `Allowance Ayah Singgih` dan `Allowance Mami Farah` tanpa mengubah kategori internal `personal_allowance`.
 - Given belum ada allocation rule yang dikonfigurasi untuk suatu bucket, when draft dihasilkan, then bucket tersebut ditampilkan ke user sebagai perlu input eksplisit, bukan nilai tebakan.
 - Given household belum memutuskan bahwa remainder menjadi buffer, when Hermes menghitung remainder, then nilai tersebut ditampilkan sebagai belum dialokasikan dan tidak diam-diam disimpan sebagai buffer.
@@ -212,6 +216,8 @@ P1
 | BR-01 | Draft allocation tidak berpengaruh terhadap authoritative household state apa pun sebelum dikonfirmasi. |
 | BR-02 | Hanya identitas Telegram yang allowlisted yang dapat membuat atau mengonfirmasi allocation. |
 | BR-03 | Satu periode allocation hanya boleh memiliki maksimal satu confirmed allocation; edit atau replacement setelah Confirmed berada di luar scope V1 dan tidak boleh dilakukan diam-diam. |
+| BR-04 | MonthlyAllocation dan AllocationItem adalah PLAN; confirmation tidak membuktikan uang dipindahkan atau giving dipenuhi. |
+| BR-05 | Remainder positif boleh tetap unallocated setelah household memutuskan demikian secara eksplisit; keputusan ini terpisah dari confirmation allocation. |
 
 ---
 
@@ -225,7 +231,7 @@ P1
 
 ### State Invariants
 
-- Hanya Confirmed allocation yang digunakan sebagai source of truth untuk status household budget/allowance/zakat/sedekah/savings-contribution periode tersebut.
+- Confirmed allocation adalah source of truth untuk PLAN periode tersebut, bukan bukti ACTUAL SavingsContribution atau GivingRecord.
 - Draft tidak pernah menimpa Confirmed allocation yang sudah ada untuk periode yang sama; edit/replacement setelah Confirmed berada di luar scope V1.
 
 ---
@@ -253,7 +259,8 @@ Frontend/chat visibility bukan security enforcement.
 |---|---:|---|
 | Nominal income bulanan | Yes | Nominal numerik positif |
 | Periode allocation (bulan/tahun) | Yes | Orchestration boleh menentukan periode saat ini bila user tidak menyebutkan; Household MCP selalu menerima `YYYY-MM` eksplisit |
-| Household allocation rules (zakat/sedekah/savings/budget/allowance) | No | Fallback bertanya ke household jika rule belum dikonfigurasi |
+| Financial rules | Yes | Dibaca dari Household MCP: zakat THP × 2.5%, sedekah MANUAL, savings GOAL_BASED, remainder ASK_ALLOW_UNALLOCATED |
+| Sedekah/budget/allowance/savings amount | Yes when applicable | Nilai manual household; FARIA tidak mengarang nominal |
 
 ### Outputs
 
@@ -281,7 +288,7 @@ Physical schema: lihat `../02_architecture/DATA_MODEL.md`.
 | `monthly_allocation_confirm` | `allocation_id`, optional `confirmation_reference` | Transisi idempotent Draft ke Confirmed setelah konfirmasi ditetapkan di orchestration layer |
 | `monthly_allocation_discard_draft` | `allocation_id` | Transisi Draft ke Discarded; Confirmed tidak dapat dibuang |
 
-Semua nominal menggunakan integer IDR. Tool tidak menginfer periode, menghitung formula zakat, membuat aturan sedekah, menerima raw SQL, atau menghapus Confirmed allocation.
+Semua nominal menggunakan integer IDR. Allocation tool tidak menginfer periode, membuat actual contribution/giving, menerima raw SQL, atau menghapus Confirmed allocation. Rule/zakat reads menggunakan `financial_rules_get` dan `zakat_calculate`; savings goals menggunakan `savings_goal_list` sebagai input penyusunan plan.
 
 ### External Services
 
@@ -408,8 +415,8 @@ Koreksi schema yang sudah diterapkan dilakukan lewat forward version-controlled 
 
 | ID | Question | Owner | Blocking? |
 |---|---|---|---|
-| Q-01 | Formula/aturan alokasi zakat penghasilan yang tepat | Household | Yes |
-| Q-02 | Aturan/nominal sedekah bulanan yang berulang | Household | Yes |
+| Q-01 | Resolved in RF-04: household memilih THP × 2.5% | Household | No |
+| Q-02 | Resolved in RF-04: sedekah manual setiap bulan | Household | No |
 | Q-03 | Contract tool Household MCP yang tepat (parameter/response shape) | Resolved in RF-02; see Section 9 | No |
 
 ---
@@ -434,6 +441,7 @@ Koreksi schema yang sudah diterapkan dilakukan lewat forward version-controlled 
 
 | Version | Date | Change | Author |
 |---|---|---|---|
+| 0.5 | `2026-09-12` | Added RF-04 household rules, goal-based savings allocation, explicit unallocated remainder, and PLAN-versus-ACTUAL boundaries | sipratama |
 | 0.4 | `2026-09-12` | Added household display labels for the two personal allowance line items | sipratama |
 | 0.3 | `2026-09-12` | Added RF-03 conversation, correction, remainder, explicit-confirmation, and confirmed-period behavior | sipratama |
 | 0.2 | `2026-09-12` | Recorded the RF-02 MCP tool surface and clarified draft persistence, period, identity, and confirmation boundaries | sipratama |

@@ -8,7 +8,7 @@ from mcp import Client
 from faria_household_mcp.server import TOOL_NAMES, create_server
 
 
-def test_server_exposes_exactly_four_monthly_allocation_tools(tmp_path) -> None:
+def test_server_exposes_exactly_twelve_constrained_household_tools(tmp_path) -> None:
     async def scenario() -> None:
         async with Client(create_server(tmp_path / "faria.db")) as client:
             result = await client.list_tools()
@@ -27,6 +27,30 @@ def test_server_exposes_exactly_four_monthly_allocation_tools(tmp_path) -> None:
             }
             assert set(tools["monthly_allocation_discard_draft"].input_schema["properties"]) == {
                 "allocation_id"
+            }
+            assert set(tools["financial_rules_get"].input_schema["properties"]) == set()
+            assert set(tools["zakat_calculate"].input_schema["properties"]) == {"thp_idr"}
+            assert set(tools["savings_goal_list"].input_schema["properties"]) == {"status"}
+            assert set(tools["savings_goal_create"].input_schema["properties"]) == {
+                "name",
+                "target_amount_idr",
+                "description",
+                "target_date",
+            }
+            assert set(tools["savings_goal_get"].input_schema["properties"]) == {"goal_id"}
+            assert set(tools["savings_contribution_record"].input_schema["properties"]) == {
+                "goal_id",
+                "amount_idr",
+                "source_allocation_reference",
+                "note",
+            }
+            assert set(tools["giving_list"].input_schema["properties"]) == {"period", "type"}
+            assert set(tools["giving_record"].input_schema["properties"]) == {
+                "type",
+                "amount_idr",
+                "period",
+                "monthly_allocation_reference",
+                "note",
             }
 
     asyncio.run(scenario())
