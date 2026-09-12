@@ -68,6 +68,14 @@ tmp/
 *.bak
 
 # ==========================================
+# Node / Next.js local artifacts
+# ==========================================
+node_modules/
+.next/
+coverage/
+*.tsbuildinfo
+
+# ==========================================
 # Python / SQLite local artifacts
 # ==========================================
 .venv/

@@ -133,6 +133,21 @@ class HouseholdDatabase:
                     (now, now),
                 )
 
+            persona_state_exists = connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'agent_persona_state'"
+            ).fetchone()
+            if persona_state_exists is not None:
+                now = utc_now()
+                connection.executemany(
+                    """
+                    INSERT OR IGNORE INTO agent_persona_state (
+                        persona, status, current_task, last_activity_at,
+                        last_error_summary, updated_at
+                    ) VALUES (?, 'IDLE', NULL, NULL, NULL, ?)
+                    """,
+                    (("FINANCE", now), ("GIVING", now)),
+                )
+
     def get_period_state(self, period: str) -> PeriodAllocationView:
         self.initialize()
         with self.connect() as connection:

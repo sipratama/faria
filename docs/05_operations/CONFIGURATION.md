@@ -1,6 +1,6 @@
 # Configuration — FARIA
 
-> **Scope:** Runtime configuration through RF-04. Hermes and 9Router remain externally managed; FARIA owns the canonical SOUL/Finance skill and Household MCP owns one optional runtime setting.
+> **Scope:** Runtime configuration through RF-05. Hermes and 9Router remain externally managed; FARIA owns the canonical SOUL/Finance skill, Household MCP persistence, and the local read-only dashboard boundary.
 
 ## 1. Hermes-Managed Configuration
 
@@ -32,15 +32,18 @@ The Telegram bot token and explicit allowlist also remain in Hermes-managed conf
 
 ## 2. FARIA Repository Configuration
 
-Household MCP is the first repository-owned process. It supports one optional environment variable:
+The repository-owned Python and Next.js processes support these optional environment variables:
 
 | Setting | Default | Purpose |
 |---|---|---|
-| `FARIA_DB_PATH` | `~/.faria/data/faria.db` | Override the SQLite path for isolated development/manual acceptance |
+| `FARIA_DB_PATH` | `~/.faria/data/faria.db` | Shared Household MCP/Dashboard API SQLite path; override for isolated acceptance |
+| `FARIA_DASHBOARD_API_URL` | `http://127.0.0.1:8000` | Server-only Next.js base URL for the read-only Dashboard API |
 
 The default and any personal database must remain outside the Git repository. The process creates the parent directory and database with owner-only permissions. No repository `.env`, Compose file, or committed Hermes config is required.
 
 Do not duplicate Hermes or 9Router secrets into this repository for convenience.
+
+`FARIA_DASHBOARD_API_URL` must not use a `NEXT_PUBLIC_` prefix. The RF-05 API host is fixed to `127.0.0.1`; do not expose it through a public bind, reverse proxy, tunnel, or network address. Remote access requires the later authentication/deployment phase.
 
 ### Hermes MCP Registration
 
@@ -88,6 +91,7 @@ FARIA owns only these architectural expectations:
 - the owner is configured in both the explicit allowlist and local DM identity mapping; spouse onboarding/testing remains outstanding;
 - rejection of a non-allowlisted Telegram identity has not yet been tested.
 - stdio MCP calls do not currently carry trustworthy per-Telegram-user identity into Household MCP; Telegram allowlisting remains the external authentication boundary.
+- the dashboard is local-only and read-only; it adds no Telegram capability and no financial HTTP operation.
 
 Spouse onboarding and an actual rejection test from a non-allowlisted identity remain required before shared household use is considered accepted.
 

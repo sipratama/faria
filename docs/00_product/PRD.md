@@ -12,7 +12,7 @@
 |---|---|
 | Product | FARIA |
 | Status | Draft |
-| Version | `0.2` |
+| Version | `0.3` |
 | Owner | sipratama |
 | Last Updated | `2026-09-12` |
 | Target Release / Phase | V1 — personal MVP |
@@ -183,6 +183,12 @@ P1
 
 **Related Feature Specs**
 - `../01_features/monthly-allocation.md` (langkah dashboard reflection).
+
+**RF-05 implementation note**
+The first local, read-only control center implements current Finance/Giving state,
+completed activity history, pending MonthlyAllocation drafts, and a small household
+snapshot. Home Ops and Planner remain visibly inactive. Scheduled/next-task state,
+Hermes/9Router live health, and AI usage/cost remain deferred until reliable sources exist.
 
 ### CAP-APPROVE-001 — Human Confirmation Boundary
 
@@ -434,4 +440,5 @@ Engineering Definition of Done berada di `AGENTS.md` dan engineering standards.
 
 | Version | Date | Change | Author |
 |---|---|---|---|
+| 0.3 | `2026-09-12` | Recorded the RF-05 read-only Agent Control Center capability boundary | sipratama |
 | 0.1 | `2026-09-11` | Initial draft | sipratama |

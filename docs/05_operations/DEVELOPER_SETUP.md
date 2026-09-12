@@ -1,6 +1,6 @@
 # Developer Setup — FARIA
 
-> **Scope:** Accepted macOS development path through RF-04: runtime connectivity, Household MCP, repo-owned FARIA identity/Finance skill, Telegram finance workflows, and local household-member identity mapping. The dashboard is not included.
+> **Scope:** Accepted macOS development path through RF-05: runtime connectivity, Household MCP, repo-owned FARIA identity/Finance skill, Telegram finance workflows, local household-member identity mapping, and the read-only Agent Control Center.
 
 ## 1. Prerequisites
 
@@ -8,6 +8,7 @@
 - a local 9Router instance publishing host port `20128`;
 - the official Hermes managed installer;
 - Python 3.11+ and `uv` for Household MCP;
+- Node.js 22+ and npm for the Next.js dashboard;
 - a Telegram BotFather token and explicit household-user allowlist for gateway setup.
 
 Keep all API credentials, bot tokens, and Telegram user IDs outside this repository.
@@ -151,7 +152,43 @@ hermes mcp list
 
 Use a temporary `FARIA_DB_PATH` and synthetic future-period values for manual acceptance; never test against the personal database.
 
-## 9. Repeat Non-Secret Checks
+## 9. Run the Local Agent Control Center
+
+The dashboard API and Next.js process are local development services. Never bind or proxy them to a LAN or the internet before the later deployment/authentication hardening phase.
+
+From `household-mcp/`, start the read-only API against the intended database:
+
+```bash
+FARIA_DB_PATH=/path/to/isolated-faria.db uv run faria-dashboard-api
+```
+
+The console entry point always binds to `127.0.0.1:8000` and exposes only:
+
+```text
+GET /health
+GET /api/dashboard
+GET /api/activities
+```
+
+From `web/`, install and start Next.js:
+
+```bash
+npm install
+npm run dev
+```
+
+Open `http://127.0.0.1:3000`. The browser polls the same-origin Next.js route every ten seconds; only the Next.js server calls the Python API. Stop the API to verify the explicit unavailable state. Use a temporary SQLite database and synthetic values for acceptance.
+
+Run frontend checks with:
+
+```bash
+npm run lint
+npm run type-check
+npm test
+npm run build
+```
+
+## 10. Repeat Non-Secret Checks
 
 ```bash
 scripts/runtime/check-runtime.sh
@@ -159,7 +196,7 @@ scripts/runtime/check-runtime.sh
 
 See `scripts/runtime/README.md` for the recorded manual acceptance evidence and the still-unverified unauthorized-identity rejection check.
 
-## 10. Activate FARIA Identity and Finance Skill
+## 11. Activate FARIA Identity and Finance Skill
 
 The repository owns the canonical runtime behavior:
 
@@ -183,7 +220,7 @@ Use Hermes v0.21.2's supported `telegram.channel_prompts` configuration to injec
 
 For a Telegram private DM, Hermes resolves `channel_prompts` from the DM chat ID on every turn. This makes identity available in fresh sessions without depending on `USER.md`, model memory, Telegram display names, usernames, or self-claimed identity. The matching allowlist entry must already authorize the sender; the prompt itself grants no access.
 
-## 11. Restrict and Refresh Telegram
+## 12. Restrict and Refresh Telegram
 
 Use `hermes tools enable|disable --platform telegram` so the effective Telegram surface contains only `skills` and the twelve configured `faria-household` tools. In particular, verify these are disabled:
 
@@ -204,7 +241,7 @@ hermes tools list --platform telegram
 
 Use a fresh Telegram session for final acceptance. Run CLI pre-acceptance with an isolated `FARIA_DB_PATH` and synthetic future-period values; restore the normal MCP configuration and delete the temporary database afterward.
 
-## 12. Related Documents
+## 13. Related Documents
 
 - `docs/05_operations/CONFIGURATION.md`
 - `scripts/runtime/README.md`

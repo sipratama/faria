@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 
 import pytest
 from mcp import Client
 
+from faria_household_mcp.database import HouseholdDatabase
+from faria_household_mcp.monitoring import MonitoringService
 from faria_household_mcp.server import TOOL_NAMES, create_server
 
 
@@ -93,6 +96,51 @@ def test_tools_complete_draft_confirm_and_get_flow(tmp_path) -> None:
             assert get_result.structured_content["confirmed"]["allocation_id"] == draft["allocation_id"]
 
     asyncio.run(scenario())
+
+
+def test_successful_mutation_records_activity_but_reads_are_quiet(tmp_path) -> None:
+    database_path = tmp_path / "faria.db"
+
+    async def scenario() -> None:
+        async with Client(create_server(database_path)) as client:
+            await client.call_tool("monthly_allocation_get", {"period": "2099-01"})
+            draft_result = await client.call_tool(
+                "monthly_allocation_save_draft",
+                {"period": "2099-01", "income_idr": 1_000_000, "items": []},
+            )
+            assert draft_result.is_error is False
+            await client.call_tool("monthly_allocation_get", {"period": "2099-01"})
+
+    asyncio.run(scenario())
+    activities = MonitoringService(HouseholdDatabase(database_path)).list_recent()
+
+    assert len(activities) == 1
+    assert activities[0].activity_type == "MONTHLY_ALLOCATION_DRAFT_SAVED"
+    assert activities[0].summary == "Monthly allocation draft saved for 2099-01."
+
+
+def test_monitoring_failure_does_not_fail_successful_financial_mutation(
+    tmp_path, monkeypatch
+) -> None:
+    database_path = tmp_path / "faria.db"
+
+    def monitoring_failure(*args, **kwargs):
+        raise sqlite3.OperationalError("synthetic monitoring failure")
+
+    monkeypatch.setattr(MonitoringService, "mark_working", monitoring_failure)
+    monkeypatch.setattr(MonitoringService, "record_success", monitoring_failure)
+
+    async def scenario() -> None:
+        async with Client(create_server(database_path)) as client:
+            result = await client.call_tool(
+                "monthly_allocation_save_draft",
+                {"period": "2099-01", "income_idr": 1_000_000, "items": []},
+            )
+            assert result.is_error is False
+            assert result.structured_content["status"] == "DRAFT"
+
+    asyncio.run(scenario())
+    assert HouseholdDatabase(database_path).get_period_state("2099-01").draft is not None
 
 
 def test_server_exposes_no_resources_or_prompts(tmp_path) -> None:

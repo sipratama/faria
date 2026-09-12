@@ -34,7 +34,7 @@ def test_new_database_initializes_once_and_enables_foreign_keys(database) -> Non
         migration_count = connection.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
         foreign_keys = connection.execute("PRAGMA foreign_keys").fetchone()[0]
 
-    assert migration_count == 2
+    assert migration_count == 3
     assert foreign_keys == 1
     assert database.path.exists()
     assert database.path.parent.exists()
@@ -88,9 +88,65 @@ def test_existing_rf02_database_upgrades_forward_without_losing_allocation(tmp_p
         versions = connection.execute(
             "SELECT version FROM schema_migrations ORDER BY version"
         ).fetchall()
-    assert [row["version"] for row in versions] == ["001", "002"]
+    assert [row["version"] for row in versions] == ["001", "002", "003"]
     assert state.draft is not None
     assert state.draft.allocation_id == allocation_id
+
+
+def test_existing_rf04_database_upgrades_to_monitoring_without_losing_data(tmp_path) -> None:
+    migrations = Path(__file__).parents[1] / "migrations"
+    database_path = tmp_path / "faria.db"
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            CREATE TABLE schema_migrations (
+                version TEXT PRIMARY KEY,
+                checksum TEXT NOT NULL,
+                applied_at TEXT NOT NULL
+            )
+            """
+        )
+        for migration_name in (
+            "001_monthly_allocation.sql",
+            "002_financial_rules_savings_giving.sql",
+        ):
+            script = (migrations / migration_name).read_text(encoding="utf-8")
+            connection.executescript(script)
+            connection.execute(
+                "INSERT INTO schema_migrations VALUES (?, ?, ?)",
+                (
+                    migration_name.split("_", 1)[0],
+                    hashlib.sha256(script.encode("utf-8")).hexdigest(),
+                    "2099-01-01T00:00:00Z",
+                ),
+            )
+        connection.execute(
+            """
+            INSERT INTO savings_goals (
+                id, name, target_amount_idr, status, created_at, updated_at
+            ) VALUES (?, 'Synthetic goal', 1000000, 'ACTIVE', ?, ?)
+            """,
+            (str(uuid4()), "2099-01-01T00:00:00Z", "2099-01-01T00:00:00Z"),
+        )
+
+    database = HouseholdDatabase(database_path)
+    database.initialize()
+
+    with database.connect() as connection:
+        versions = connection.execute(
+            "SELECT version FROM schema_migrations ORDER BY version"
+        ).fetchall()
+        goals = connection.execute("SELECT COUNT(*) FROM savings_goals").fetchone()[0]
+        personas = connection.execute(
+            "SELECT persona, status FROM agent_persona_state ORDER BY persona"
+        ).fetchall()
+
+    assert [row["version"] for row in versions] == ["001", "002", "003"]
+    assert goals == 1
+    assert [(row["persona"], row["status"]) for row in personas] == [
+        ("FINANCE", "IDLE"),
+        ("GIVING", "IDLE"),
+    ]
 
 
 def test_get_separates_non_authoritative_draft_from_confirmed_state(service) -> None:

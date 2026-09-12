@@ -4,7 +4,7 @@ FARIA (FArah RIzkia Ananda) is a private, single-household **AI Household Operat
 
 ## Status
 
-Personal MVP through RF-04: runtime connectivity, monthly allocation, household member identity, authoritative financial rules, savings goals/contributions, and actual giving records are implemented. The accepted local runtime uses managed Hermes on macOS, a launchd-supervised Telegram gateway, and 9Router through Docker/OrbStack. Household MCP provides a constrained Python stdio server backed by SQLite, while the repo-owned FARIA identity and Finance skill enforce the PLAN-versus-ACTUAL and explicit-confirmation boundaries. The dashboard remains deferred.
+Personal MVP through RF-05: runtime connectivity, household finance foundations, agent monitoring, and the local read-only Agent Control Center are implemented. Household MCP remains the sole mutation authority over SQLite; a separate loopback-only FastAPI process provides three purpose-built GET endpoints to the Next.js dashboard. Telegram remains the primary interaction and financial-mutation interface.
 
 ## What FARIA Does (V1)
 
@@ -19,11 +19,11 @@ FARIA manages **allocations and goals, not transactions** — it deliberately do
 
 ## Architecture Summary
 
-One Hermes agent runtime orchestrates four logical personas (Finance, Giving, Home Ops, Planner) as skills — not independent agents — routed through 9Router to OpenRouter for model access. The Finance skill currently covers allocation, rules, savings, and giving through exactly twelve `faria-household` MCP tools; the developer CLI keeps its broader tool surface. Authoritative household state lives in SQLite behind that constrained MCP boundary, with no raw SQL or shell access from Telegram. A React/Next.js dashboard remains a later read path. See `docs/02_architecture/SYSTEM_ARCHITECTURE.md` for the full picture.
+One Hermes agent runtime orchestrates four logical personas (Finance, Giving, Home Ops, Planner) as skills — not independent agents — routed through 9Router to OpenRouter for model access. The Finance skill covers allocation, rules, savings, and giving through exactly twelve `faria-household` MCP tools. Authoritative household state lives in SQLite behind that constrained MCP boundary. The React/Next.js dashboard reads only through a separate FastAPI query boundary and clearly marks Home Ops, Planner, Gateway, 9Router, and AI usage according to what is actually observable.
 
 ## First Vertical Slice
 
-**Household Finance**: FARIA retrieves authoritative rules, calculates zakat deterministically, asks for manual sedekah and goal allocations, saves a non-authoritative monthly plan, and records actual savings/giving only through separate explicitly confirmed actions. Dashboard reflection remains deferred. See `docs/01_features/monthly-allocation.md`, `docs/01_features/savings-goals.md`, and `docs/01_features/giving.md`.
+**Household Finance**: FARIA retrieves authoritative rules, calculates zakat deterministically, asks for manual sedekah and goal allocations, saves a non-authoritative monthly plan, and records actual savings/giving only through separate explicitly confirmed actions. The local dashboard reflects pending drafts, recent monitored actions, persona state, and a small household snapshot without exposing financial controls.
 
 ## Documentation Map
 
@@ -47,4 +47,4 @@ Hermes (agent runtime) · 9Router (model gateway) · OpenRouter (model provider)
 
 ## Setup
 
-RF-01 established Telegram → Hermes Gateway → 9Router → model. RF-02 added Hermes → Household MCP → SQLite, RF-03 added the repo-owned identity and Finance skill, and RF-04 expands the constrained MCP/Telegram surface to twelve finance tools. See `docs/05_operations/DEVELOPER_SETUP.md` for local activation and testing, and `scripts/runtime/README.md` for runtime checks.
+RF-01 established Telegram → Hermes Gateway → 9Router → model. RF-02 added Hermes → Household MCP → SQLite, RF-03 added the repo-owned identity and Finance skill, RF-04 expanded the constrained surface to twelve finance tools, and RF-05 added monitoring plus the local read-only dashboard. See `docs/05_operations/DEVELOPER_SETUP.md` for activation and testing.

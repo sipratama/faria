@@ -23,6 +23,7 @@ from faria_household_mcp.financial_rules import (
     ZakatCalculationView,
 )
 from faria_household_mcp.giving import GivingError, GivingRecordView, GivingService, GivingType
+from faria_household_mcp.monitoring import MonitoringService, Persona
 from faria_household_mcp.savings import (
     SavingsContributionResult,
     SavingsError,
@@ -59,12 +60,66 @@ def _call_domain(operation: Callable[..., _T], *args: object) -> _T:
         raise ToolError(str(error)) from error
 
 
+def _best_effort(operation: Callable[..., object], *args: object) -> None:
+    try:
+        operation(*args)
+    except Exception:
+        # Monitoring is secondary and must never change the outcome of household operations.
+        pass
+
+
+def _call_monitored(
+    monitoring: MonitoringService,
+    persona: Persona,
+    task: str,
+    activity_type: str,
+    success_summary: Callable[[_T], str],
+    reference: Callable[[_T], tuple[str, str] | None],
+    operation: Callable[..., _T],
+    *args: object,
+) -> _T:
+    _best_effort(monitoring.mark_working, persona, task)
+    try:
+        result = operation(*args)
+    except (AllocationError, FinancialRulesError, SavingsError, GivingError) as error:
+        _best_effort(
+            monitoring.record_failure,
+            persona,
+            activity_type,
+            f"{task} failed.",
+        )
+        raise ToolError(str(error)) from error
+    except Exception:
+        _best_effort(
+            monitoring.record_failure,
+            persona,
+            activity_type,
+            f"{task} failed.",
+        )
+        raise
+
+    def record_monitoring_success() -> None:
+        activity_reference = reference(result)
+        reference_type, reference_id = activity_reference or (None, None)
+        monitoring.record_success(
+            persona,
+            activity_type,
+            success_summary(result),
+            reference_type,
+            reference_id,
+        )
+
+    _best_effort(record_monitoring_success)
+    return result
+
+
 def create_server(database_path: str | Path | None = None) -> MCPServer:
     database = HouseholdDatabase(database_path)
     allocation_service = MonthlyAllocationService(database)
     rules_service = FinancialRulesService(database)
     savings_service = SavingsService(database)
     giving_service = GivingService(database)
+    monitoring = MonitoringService(database)
     server = MCPServer(
         name="faria-household",
         title="FARIA Household",
@@ -90,7 +145,18 @@ def create_server(database_path: str | Path | None = None) -> MCPServer:
         items: list[AllocationItemInput],
     ) -> AllocationView:
         """Create or update a non-authoritative draft from caller-supplied IDR values."""
-        return _call_domain(allocation_service.save_draft, period, income_idr, items)
+        return _call_monitored(
+            monitoring,
+            "FINANCE",
+            "Monthly allocation draft",
+            "MONTHLY_ALLOCATION_DRAFT_SAVED",
+            lambda result: f"Monthly allocation draft saved for {result.period}.",
+            lambda result: ("MONTHLY_ALLOCATION", result.allocation_id),
+            allocation_service.save_draft,
+            period,
+            income_idr,
+            items,
+        )
 
     @server.tool(name="monthly_allocation_confirm", structured_output=True)
     def monthly_allocation_confirm(
@@ -98,12 +164,31 @@ def create_server(database_path: str | Path | None = None) -> MCPServer:
         confirmation_reference: str | None = None,
     ) -> AllocationView:
         """Make an existing draft authoritative after external human confirmation."""
-        return _call_domain(allocation_service.confirm, allocation_id, confirmation_reference)
+        return _call_monitored(
+            monitoring,
+            "FINANCE",
+            "Monthly allocation confirmation",
+            "MONTHLY_ALLOCATION_CONFIRMED",
+            lambda result: f"Monthly allocation confirmed for {result.period}.",
+            lambda result: ("MONTHLY_ALLOCATION", result.allocation_id),
+            allocation_service.confirm,
+            allocation_id,
+            confirmation_reference,
+        )
 
     @server.tool(name="monthly_allocation_discard_draft", structured_output=True)
     def monthly_allocation_discard_draft(allocation_id: str) -> AllocationView:
         """Discard an existing draft; confirmed allocations cannot be discarded."""
-        return _call_domain(allocation_service.discard_draft, allocation_id)
+        return _call_monitored(
+            monitoring,
+            "FINANCE",
+            "Monthly allocation draft discard",
+            "MONTHLY_ALLOCATION_DRAFT_DISCARDED",
+            lambda result: f"Monthly allocation draft discarded for {result.period}.",
+            lambda result: ("MONTHLY_ALLOCATION", result.allocation_id),
+            allocation_service.discard_draft,
+            allocation_id,
+        )
 
     @server.tool(name="financial_rules_get", structured_output=True)
     def financial_rules_get() -> FinancialRulesView:
@@ -128,7 +213,13 @@ def create_server(database_path: str | Path | None = None) -> MCPServer:
         target_date: str | None = None,
     ) -> SavingsGoalView:
         """Create a goal only after the orchestration layer obtains explicit confirmation."""
-        return _call_domain(
+        return _call_monitored(
+            monitoring,
+            "FINANCE",
+            "Savings goal creation",
+            "SAVINGS_GOAL_CREATED",
+            lambda result: "Savings goal created.",
+            lambda result: ("SAVINGS_GOAL", result.goal_id),
             savings_service.create_goal,
             name,
             target_amount_idr,
@@ -149,7 +240,13 @@ def create_server(database_path: str | Path | None = None) -> MCPServer:
         note: str | None = None,
     ) -> SavingsContributionResult:
         """Record actual savings progress only after explicit human confirmation."""
-        return _call_domain(
+        return _call_monitored(
+            monitoring,
+            "FINANCE",
+            "Savings contribution recording",
+            "SAVINGS_CONTRIBUTION_RECORDED",
+            lambda result: "Savings contribution recorded.",
+            lambda result: ("SAVINGS_CONTRIBUTION", result.contribution.contribution_id),
             savings_service.record_contribution,
             goal_id,
             amount_idr,
@@ -174,7 +271,17 @@ def create_server(database_path: str | Path | None = None) -> MCPServer:
         note: str | None = None,
     ) -> GivingRecordView:
         """Record actual giving only after the orchestration layer obtains explicit confirmation."""
-        return _call_domain(
+        return _call_monitored(
+            monitoring,
+            "GIVING",
+            "Giving record creation",
+            "GIVING_RECORDED",
+            lambda result: (
+                "Zakat giving recorded."
+                if result.type == "zakat_penghasilan"
+                else "Sedekah giving recorded."
+            ),
+            lambda result: ("GIVING_RECORD", result.giving_record_id),
             giving_service.record,
             type,
             amount_idr,

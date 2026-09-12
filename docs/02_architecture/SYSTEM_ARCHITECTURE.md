@@ -2,7 +2,7 @@
 
 > **Document role:** Authoritative source for the system's high-level technical structure, boundaries, runtime interactions, and architectural invariants.
 >
-> Product behavior belongs in the PRD and feature specs. Decision rationale belongs in ADRs (none yet). Exact public interfaces belong in machine-readable contracts (not created yet). Detailed coding conventions belong in engineering standards.
+> Product behavior belongs in the PRD and feature specs. Decision rationale belongs in ADRs. Exact public interfaces belong in executable API models. Detailed coding conventions belong in engineering standards.
 
 ---
 
@@ -12,7 +12,7 @@
 |---|---|
 | Project | FARIA |
 | Status | Draft |
-| Version | `0.6` |
+| Version | `0.7` |
 | Architecture Owner | sipratama |
 | Last Updated | `2026-09-12` |
 
@@ -26,7 +26,7 @@ FARIA is a private household AI operating system. A conversational agent runtime
 
 ### Architecture Style
 
-Modular monolith (single Hermes runtime with multiple skills/personas) + a separate constrained domain-tool service (Household MCP) + a separate dashboard web app.
+Modular monolith (single Hermes runtime with multiple skills/personas) + a constrained domain-tool service (Household MCP) + a separate read-only dashboard API and Next.js web app.
 
 ### Primary Runtime Components
 
@@ -35,6 +35,7 @@ Modular monolith (single Hermes runtime with multiple skills/personas) + a separ
 - 9Router (model gateway)
 - OpenRouter (model provider)
 - Household MCP server (domain tool boundary)
+- Dashboard API (read-only local HTTP boundary)
 - SQLite (authoritative structured store)
 - Dashboard (React/Next.js web app, Agent Control Center)
 - Encrypted external backup destination (provider TBD)
@@ -90,11 +91,19 @@ The architecture is not currently optimized for:
 | (authoritative)   |        |  Backup (TBD)   |
 +-------------------+        +------------------+
           ^
-          | read via application/API boundary
-+-------------------+
-|     Dashboard     |
-| (Agent Control    |
-|  Center)          |
+          | fixed read queries
++---------+---------+
+|   Dashboard API   |
++---------+---------+
+          ^
+          | server-side HTTP
++---------+---------+
+| Next.js Dashboard |
++---------+---------+
+          ^
+          | local browser
++---------+---------+
+| Household viewers |
 +-------------------+
 ```
 
@@ -151,10 +160,11 @@ Docker isolates Hermes terminal/tool execution and runs 9Router; it does not hos
 | Component | Responsibility | Technology | Current / Planned Execution Unit |
 |---|---|---|---|
 | Household MCP (through RF-04 implemented locally) | Twelve constrained allocation/rules/savings/giving tools over stdio | Python 3.11, official MCP SDK, stdlib SQLite | Hermes-managed local stdio process; production unit TBD |
-| Dashboard | Agent Control Center web UI | React / Next.js | TBD before deployment |
+| Dashboard API (RF-05 implemented locally) | Purpose-built read-only household/monitoring queries | FastAPI / Uvicorn | macOS process bound to `127.0.0.1:8000` |
+| Dashboard (RF-05 implemented locally) | Read-only Agent Control Center web UI | React / Next.js | Node process bound to loopback; production unit TBD |
 | SQLite | Authoritative structured data | SQLite file | Host/volume and backup mechanism TBD before production use |
 
-The logical relationships among Hermes, Household MCP, SQLite, and the dashboard remain as documented throughout this architecture. RF-02 establishes the local deterministic `Hermes -> Household MCP -> SQLite` path but does not choose production packaging.
+The logical relationships among Hermes, Household MCP, SQLite, and the dashboard remain as documented throughout this architecture. RF-05 adds the local `Browser -> Next.js -> Dashboard API -> query layer -> SQLite` read path without choosing production packaging.
 
 ---
 
@@ -162,10 +172,12 @@ The logical relationships among Hermes, Household MCP, SQLite, and the dashboard
 
 The dashboard is a React/Next.js web app. It:
 
-- displays persona status (Idle/Working/Scheduled/Error), current/last task, last activity, next scheduled task, health, model alias, basic AI usage/cost, and pending confirmations;
+- displays observable persona status (Idle/Working/Error), current task, last activity, health, model alias, pending allocation drafts, and a small household snapshot;
 - reads household/agent-activity state only through an application/API boundary — it must not read the SQLite file directly.
+- polls a same-origin Next.js GET route every ten seconds; the Next.js server calls the local Python API using a server-only base URL.
+- labels Home Ops and Planner as not activated, and Gateway/9Router/AI usage as not monitored or not connected rather than fabricating status.
 
-Exact component structure and client-state-management choices are not fixed yet (see Open Architecture Questions); no speculative structure is defined here. 2D/3D visualization is explicitly out of scope for V1 (see Product Brief Non-Goals).
+RF-05 uses React component state only for polling/error UX and introduces no client state framework, WebSocket, SSE, or direct database access. 2D/3D visualization remains explicitly out of scope.
 
 ### Frontend Boundaries
 
@@ -179,6 +191,7 @@ Exact component structure and client-state-management choices are not fixed yet 
 
 - **Hermes Runtime**: conversational orchestration, intent recognition, presenting drafts, invoking Household MCP tools, running scheduled routines (Hermes Cron).
 - **Household MCP**: the only component authorized to validate and mutate authoritative household state in SQLite.
+- **Dashboard API**: a separate FastAPI entry point in the Household MCP package, authorized only for fixed dashboard queries over SQLite.
 
 ### Module / Domain Boundaries (logical, within Hermes)
 
@@ -189,6 +202,7 @@ Exact component structure and client-state-management choices are not fixed yet 
 | Home Ops Agent (skill) | Routines, maintenance, reminders | No | Household MCP |
 | Planner Agent (skill) | Cross-cutting scheduling/summary | No | Household MCP, other skills |
 | Household MCP | All of the above domain state | Yes | SQLite |
+| Dashboard query/API layer | No authoritative state; read projection only | No | Household MCP-owned query/database layer |
 
 **Important:** Finance Agent, Giving Agent, Home Ops Agent, and Planner Agent are logical personas/skills running inside **one Hermes runtime** in V1 — they are **not** independent autonomous LLM agents. The dashboard may visually represent them as separate staff members, but there is one runtime, one model-gateway path, and one authoritative store behind all four. This may evolve into genuinely independent agents later if real requirements justify it (see Open Architecture Questions, AQ-06).
 
@@ -222,7 +236,8 @@ Household MCP owns all authoritative household domain state (allocations, saving
 | SavingsGoal / SavingsContribution | Household MCP | SQLite |
 | GivingRecord (zakat/sedekah) | Household MCP | SQLite |
 | HouseholdRoutine | Household MCP | SQLite |
-| AgentActivity (dashboard feed) | Household MCP (ownership TBD, see Open Architecture Questions) | SQLite |
+| AgentActivity (dashboard feed) | Household MCP | SQLite |
+| AgentPersonaState (current monitoring projection) | Household MCP | SQLite |
 
 ---
 
@@ -264,11 +279,19 @@ Detailed entity definitions belong in `DATA_MODEL.md`.
 
 ### API Style
 
-Household MCP tools (constrained, function-call-style interface for the LLM — not open REST) plus a conventional application/API boundary between the dashboard and backend state. The exact dashboard API style (REST vs. RPC) is not fixed yet (see Open Architecture Questions).
+Household MCP tools remain the constrained mutation interface for Hermes. RF-05 adds a separate local REST-style read boundary for the dashboard, as recorded in `adr/ADR-0001-local-read-only-dashboard-api.md`.
 
 ### Contract Source
 
 RF-04 exposes exactly twelve tools: four `monthly_allocation_*` tools plus `financial_rules_get`, `zakat_calculate`, `savings_goal_list`, `savings_goal_create`, `savings_goal_get`, `savings_contribution_record`, `giving_list`, and `giving_record`. The three finance feature specifications own their behavior.
+
+RF-05 exposes exactly three dashboard API operations:
+
+- `GET /health`
+- `GET /api/dashboard`
+- `GET /api/activities`
+
+There are no POST, PUT, PATCH, or DELETE dashboard routes.
 
 ### API Principles
 
@@ -400,7 +423,7 @@ Basic AI usage/cost per persona for the dashboard; `allocation_confirmed` counts
 
 ### Health
 
-The dashboard's persona health signal (Idle/Working/Scheduled/Error) is the primary V1 health signal; no separate liveness/readiness endpoint design is specified yet.
+RF-05 persists active Finance/Giving state as Idle/Working/Error and exposes application/database liveness through `GET /health`. Gateway, 9Router, and AI usage are explicitly not monitored by this endpoint.
 
 ---
 
@@ -425,7 +448,7 @@ Production hosting and packaging remain open. RF-01A does not choose XCodePod ve
 
 ### Configuration
 
-For the accepted local runtime, Hermes configuration and credentials live under its managed `~/.hermes` runtime state, while 9Router owns its OpenRouter credential and physical model fallback list. The canonical FARIA identity is `agent/prompts/SOUL.md`, synchronized operationally to the active profile's `SOUL.md`; the repo skill root is added through Hermes `skills.external_dirs`. Authorized Telegram DMs receive a local-only `telegram.channel_prompts` member context keyed by their private DM chat ID. That context provides the conversational alias after the allowlist check; it does not authorize the sender. Household MCP reads only `FARIA_DB_PATH` as an optional database-path override and otherwise uses `~/.faria/data/faria.db`. Machine-specific paths remain outside committed configuration. Secrets and Telegram IDs are never hard-coded or committed.
+For the accepted local runtime, Hermes configuration and credentials live under its managed `~/.hermes` runtime state, while 9Router owns its OpenRouter credential and physical model fallback list. The canonical FARIA identity is `agent/prompts/SOUL.md`, synchronized operationally to the active profile's `SOUL.md`; the repo skill root is added through Hermes `skills.external_dirs`. Authorized Telegram DMs receive a local-only `telegram.channel_prompts` member context keyed by their private DM chat ID. That context provides the conversational alias after the allowlist check; it does not authorize the sender. Household MCP and the dashboard API read `FARIA_DB_PATH` as an optional database-path override and otherwise use `~/.faria/data/faria.db`. Next.js reads `FARIA_DASHBOARD_API_URL` server-side, defaulting to `http://127.0.0.1:8000`. Machine-specific paths remain outside committed configuration. Secrets and Telegram IDs are never hard-coded or committed.
 
 ---
 
@@ -459,11 +482,19 @@ A financial allocation (or other material state change) must not be persisted as
 
 Finance/Giving/Home Ops/Planner personas remain logical skills within one Hermes runtime unless a future ADR explicitly changes this to independent agents.
 
+### INV-05 — Dashboard reads use a purpose-built API
+
+Browser and Next.js code never access SQLite directly; dashboard data crosses the read-only Dashboard API and query layer.
+
+### INV-06 — RF-05 dashboard is local and read-only
+
+The Dashboard API binds to loopback and exposes only the three documented GET operations. Remote authentication and public deployment remain deferred.
+
 ---
 
 ## 20. Architecture Decision Records
 
-No ADRs exist yet. The technical direction in this document (Hermes, 9Router, OpenRouter, Household MCP, SQLite, and isolated tool execution) reflects an accepted product decision provided during initialization (see Product Brief, Section 9/Fixed Technical Direction) rather than a locally deliberated architecture trade-off. RF-01A aligns the local runtime description with observed operation; it does not make a new material architecture decision.
+- `ADR-0001` accepts a separate loopback-only read-only Dashboard API in the existing Household MCP package.
 
 ---
 
@@ -509,7 +540,7 @@ No ADRs exist yet. The technical direction in this document (Hermes, 9Router, Op
 | AQ-02 | Exact Household MCP tool contract shapes | Resolved in RF-02; see monthly-allocation feature spec | Implementation |
 | AQ-03 | Migration/schema tooling for SQLite | Resolved in RF-02: ordered SQL files + checksum metadata | Implementation |
 | AQ-04 | Encrypted backup destination and mechanism | Before production use | Household |
-| AQ-05 | Dashboard framework specifics beyond "React/Next.js" (state management, exact API style) | Before dashboard implementation | Implementation |
+| AQ-05 | RESOLVED in RF-05 — Next.js App Router with minimal React state and a separate FastAPI read-only API | Implementation | Implementation |
 | AQ-06 | Whether personas ever become independent agents | Only if real requirements justify it | Household / Implementation |
 | AQ-07 | Telegram tool restriction approach | Resolved in RF-03: per-platform Hermes toolsets expose skills plus `faria-household`; CLI remains separate | Implementation |
 
@@ -539,6 +570,7 @@ Do not update this document for routine internal refactoring that preserves the 
 
 | Version | Date | Change | Author |
 |---|---|---|---|
+| 0.7 | `2026-09-12` | Added the RF-05 local read-only Dashboard API, Next.js boundary, monitoring ownership, and invariants | sipratama |
 | 0.6 | `2026-09-12` | Added RF-04 financial rules, savings/giving persistence, twelve-tool boundary, and PLAN-versus-ACTUAL semantics | sipratama |
 | 0.5 | `2026-09-12` | Added local Telegram DM member-context mapping and separated display identity from authorization | sipratama |
 | 0.4 | `2026-09-12` | Added the repo-owned FARIA identity/Finance skill and restricted Telegram tool/skill surface from RF-03 | sipratama |

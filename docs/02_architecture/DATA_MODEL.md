@@ -12,7 +12,7 @@
 |---|---|
 | Project | FARIA |
 | Status | Draft |
-| Version | `0.4` |
+| Version | `0.5` |
 | Owner | sipratama |
 | Last Updated | `2026-09-12` |
 
@@ -39,7 +39,7 @@
 | Savings | SavingsGoal, SavingsContribution | Household MCP | |
 | Giving | GivingRecord | Household MCP | Zakat penghasilan + sedekah |
 | Home Ops | HouseholdRoutine | Household MCP | Reminders/maintenance |
-| Agent Monitoring | AgentActivity | Household MCP (ownership TBD, see Open Data Decisions) | Feeds dashboard |
+| Agent Monitoring | AgentActivity, AgentPersonaState | Household MCP | Operational metadata for the read-only dashboard |
 
 Ownership means the component authorized to define and mutate authoritative state. Hermes skills interact through Household MCP rather than writing owned data directly.
 
@@ -63,6 +63,7 @@ Household 1 -------- * Member
     * HouseholdRoutine
     |
     * AgentActivity
+    * AgentPersonaState
 ```
 
 ---
@@ -380,7 +381,7 @@ May be deleted by the household when no longer relevant.
 Represents a logged activity/status entry for a persona (Finance/Giving/Home Ops/Planner), feeding the dashboard.
 
 **Owner**
-Household MCP (ownership between Household MCP and Hermes is TBD — see Open Data Decisions).
+Household MCP.
 
 **Identity**
 Internal identifier.
@@ -393,19 +394,49 @@ Internal identifier.
 | Attribute | Meaning | Required? | Sensitive? |
 |---|---|---:|---:|
 | persona | Finance / Giving / Home Ops / Planner | Yes | No |
-| status | Idle / Working / Scheduled / Error | Yes | No |
-| task_description | Human-readable description of the activity | Yes | No |
+| activity_type | Stable operational event type | Yes | No |
+| status | Succeeded / Failed | Yes | No |
+| summary | Short operational description without prompts, messages, or sensitive amounts | Yes | No |
+| reference_type / reference_id | Optional pair pointing to the affected domain record | No | No |
 | occurred_at | Timestamp | Yes | No |
-| model_alias | Logical model alias used (e.g. `faria-household-main`) | No | No |
 
 **Relationships**
 - Belongs to one Household.
 
 **Invariants**
 - Does not itself carry authoritative financial amounts; it references what happened, not authoritative financial values.
+- Entries are append-only and cannot update or delete financial state.
 
 **Deletion / Retention**
-May be pruned/rotated once the dashboard no longer needs old entries (retention policy TBD).
+Append-only in RF-05; future retention requires an explicit operational policy.
+
+---
+
+### AgentPersonaState
+
+**Purpose**
+Stores the small current-state projection required to report whether an active logical persona is Idle, Working, or Error.
+
+**Owner**
+Household MCP.
+
+**Identity**
+Persona code. RF-05 initializes only `FINANCE` and `GIVING`.
+
+**Key Attributes**
+
+| Attribute | Meaning | Required? | Sensitive? |
+|---|---|---:|---:|
+| persona | `FINANCE` or `GIVING` | Yes | No |
+| status | `IDLE`, `WORKING`, or `ERROR` | Yes | No |
+| current_task | Short operational task while Working | No | No |
+| last_activity_at | Latest completed activity timestamp | No | No |
+| last_error_summary | Generic bounded error summary | No | No |
+| updated_at | Projection update timestamp | Yes | No |
+
+**Invariants**
+- Home Ops and Planner are returned as inactive API/UI metadata rather than seeded as fake runtime state.
+- Monitoring writes are operational metadata and never share write authority over financial entities.
 
 ---
 
@@ -415,6 +446,7 @@ May be pruned/rotated once the dashboard no longer needs old entries (retention 
 |---|---|---|---|
 | MonthlyAllocation | MonthlyAllocation | AllocationItem(s) | Confirming an allocation must atomically persist the allocation and all its items together. |
 | SavingsGoal | SavingsGoal | SavingsContribution(s) | Appending a contribution and completing a reached goal happen atomically. |
+| Agent Monitoring | AgentPersonaState | AgentActivity | Appending a completed activity and updating current persona state happen atomically. Financial mutations use a separate transaction and take priority if monitoring fails. |
 
 ---
 
@@ -604,7 +636,7 @@ Detailed rules belong in `../standards/07_DATA_PERSISTENCE_STANDARD.md`.
 | ID | Question | Impact | Owner |
 |---|---|---|---|
 | DQ-01 | Exact migration/schema tooling for SQLite | Resolved in RF-02: ordered SQL migrations tracked by version and checksum | Implementation |
-| DQ-02 | Whether AgentActivity is owned by Household MCP or Hermes directly | Affects dashboard read path | Implementation |
+| DQ-02 | RESOLVED in RF-05 — AgentActivity and AgentPersonaState are owned by Household MCP | Dashboard reads through the Household MCP package's read-only query/API boundary | Implementation |
 | DQ-03 | Backup retention/RPO/RTO numeric targets | Affects backup implementation | Household |
 
 Material persistence decisions should become ADRs when resolved.
@@ -625,6 +657,7 @@ Material persistence decisions should become ADRs when resolved.
 | Version | Date | Change | Author |
 |---|---|---|---|
 | 0.4 | `2026-09-12` | Added RF-04 authoritative financial rules, savings goals/contributions, giving records, and PLAN-versus-ACTUAL invariants | sipratama |
+| 0.5 | `2026-09-12` | Implemented append-only AgentActivity and active-persona state for RF-05 monitoring | sipratama |
 | 0.3 | `2026-09-12` | Aligned MonthlyAllocation/AllocationItem with the RF-02 SQLite schema and migration strategy | sipratama |
 | 0.2 | `2026-09-12` | Aligned the AgentActivity model alias example with the verified 9Router combo | sipratama |
 | 0.1 | `2026-09-11` | Initial draft | sipratama |
