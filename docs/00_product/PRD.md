@@ -182,7 +182,7 @@ Household dapat melihat apa yang sedang dilakukan FARIA dan kenapa.
 P1
 
 **Related Feature Specs**
-- `../01_features/monthly-allocation.md` (langkah dashboard reflection).
+- `../01_features/agent-control-center.md`
 
 **RF-05 implementation note**
 The first local, read-only control center implements current Finance/Giving state,
