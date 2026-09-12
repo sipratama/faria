@@ -1,6 +1,6 @@
 # Configuration — FARIA
 
-> **Scope:** RF-01 runtime connectivity plus RF-02 Household MCP runtime configuration. Hermes and 9Router remain externally managed; Household MCP has one optional repository-owned runtime setting.
+> **Scope:** Runtime configuration through RF-03. Hermes and 9Router remain externally managed; FARIA owns the canonical SOUL/Finance skill and Household MCP owns one optional runtime setting.
 
 ## 1. Hermes-Managed Configuration
 
@@ -48,6 +48,20 @@ Register the local stdio server as `faria-household` through `hermes mcp add`. I
 
 The optional `confirmation_reference` tool field is an untrusted audit label. It does not replace the Telegram allowlist and does not prove which user confirmed an allocation.
 
+### FARIA Identity and Skill Discovery
+
+`agent/prompts/SOUL.md` is the canonical FARIA identity. Synchronize it to the active FARIA profile's Hermes-home `SOUL.md`; this copy is runtime state, not a second independently maintained source.
+
+Configure `skills.external_dirs` in the active Hermes profile with the machine-local absolute path to this repository's `agent/skills`. Do not commit that absolute path. Automatic skill discovery remains enabled so ordinary Indonesian allocation messages can select `faria-finance`.
+
+### Telegram Tool Surface
+
+Configure `platform_toolsets.telegram` through supported `hermes tools --platform telegram` commands. Its native toolset is only `skills`; the enabled `faria-household` MCP server contributes exactly the four tools in its `tools.include` allowlist. The developer CLI retains its separate tool configuration.
+
+Configure `skills.platform_disabled.telegram` through Hermes' per-platform skill configuration so unrelated installed skills are hidden from household Telegram sessions. `faria-finance` remains enabled; Hermes' essential `hermes-agent` skill may also remain visible. This restriction is Telegram-specific and does not remove developer CLI skills.
+
+The Telegram surface must not include `terminal`, `file`, `browser`, `web`, `code_execution`, `delegation`, or `computer_use`. Re-run `hermes tools list --platform telegram` after Hermes upgrades or profile changes to detect configuration drift.
+
 ## 3. 9Router Configuration
 
 FARIA owns only these architectural expectations:
@@ -61,13 +75,13 @@ FARIA owns only these architectural expectations:
 ## 4. Security Boundary and Follow-Ups
 
 - only explicitly allowlisted Telegram identities may interact with FARIA;
-- Docker is the Hermes terminal sandbox backend and the egress firewall is enabled in the accepted setup;
-- Hermes still exposes general-purpose tools and skills beyond FARIA's intended household scope, so tighter tool/skill restriction remains a later security-hardening task;
+- Docker remains the Hermes terminal sandbox backend for developer CLI use; Telegram has no terminal toolset;
+- the Telegram model surface is restricted to skills plus the four allowlisted `faria-household` tools;
 - one household member is configured and tested; spouse onboarding/testing remains outstanding;
 - rejection of a non-allowlisted Telegram identity has not yet been tested.
 - stdio MCP calls do not currently carry trustworthy per-Telegram-user identity into Household MCP; Telegram allowlisting remains the external authentication boundary.
 
-These operational checks do not block RF-02 engineering work, but they must be completed before shared household use is considered accepted.
+Spouse onboarding and an actual rejection test from a non-allowlisted identity remain required before shared household use is considered accepted.
 
 ## 5. Related Documents
 

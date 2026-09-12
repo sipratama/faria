@@ -12,7 +12,7 @@
 |---|---|
 | Project | FARIA |
 | Status | Draft |
-| Version | `0.3` |
+| Version | `0.4` |
 | Architecture Owner | sipratama |
 | Last Updated | `2026-09-12` |
 
@@ -184,7 +184,7 @@ Exact component structure and client-state-management choices are not fixed yet 
 
 | Module | Responsibility | Owns Data? | May Depend On |
 |---|---|---:|---|
-| Finance Agent (skill) | Monthly allocation, household budget, personal allowances | No | Household MCP |
+| Finance Agent (repo skill: `agent/skills/faria-finance/`) | Monthly allocation, household budget, personal allowances | No | Household MCP |
 | Giving Agent (skill) | Zakat penghasilan, sedekah | No | Household MCP |
 | Home Ops Agent (skill) | Routines, maintenance, reminders | No | Household MCP |
 | Planner Agent (skill) | Cross-cutting scheduling/summary | No | Household MCP, other skills |
@@ -345,7 +345,7 @@ SQLite / Backup
 - secrets (Telegram bot token, OpenRouter/9Router keys) are not committed to source and remain in Hermes-managed or 9Router-managed runtime configuration outside this repository;
 - only allowlisted Telegram identities are processed;
 - the LLM never receives raw SQL access to authoritative household state; authoritative reads/writes use only Household MCP's constrained tools;
-- Hermes terminal execution uses a Docker sandbox with the egress firewall enabled in the accepted local topology; its broader general-purpose tool/skill surface remains a security-hardening concern before routine shared-household use;
+- the household Telegram surface exposes only the repo-owned Finance skill (plus Hermes' non-disableable operating skill) and the four allowlisted `faria-household` MCP tools; terminal, file, browser, web, code execution, delegation, and computer-use toolsets remain unavailable there, while the developer CLI is configured separately;
 - material financial state changes require explicit human confirmation before becoming authoritative; Household MCP enforces that only its confirm transition can make a draft authoritative, while Hermes/orchestration remains responsible for interpreting the human confirmation;
 - 9Router and Household MCP are not publicly exposed beyond what Hermes/dashboard need;
 - privileged/state-changing Household MCP calls should be auditable (who/when/what).
@@ -420,7 +420,7 @@ Production hosting and packaging remain open. RF-01A does not choose XCodePod ve
 
 ### Configuration
 
-For the accepted local runtime, Hermes configuration and credentials live under its managed `~/.hermes` runtime state, while 9Router owns its OpenRouter credential and physical model fallback list. Household MCP reads only `FARIA_DB_PATH` as an optional database-path override and otherwise uses `~/.faria/data/faria.db`. Hermes MCP registration may contain a machine-specific executable path outside the repository's committed configuration. Secrets are never hard-coded or committed.
+For the accepted local runtime, Hermes configuration and credentials live under its managed `~/.hermes` runtime state, while 9Router owns its OpenRouter credential and physical model fallback list. The canonical FARIA identity is `agent/prompts/SOUL.md`, synchronized operationally to the active profile's `SOUL.md`; the repo skill root is added through Hermes `skills.external_dirs`. Household MCP reads only `FARIA_DB_PATH` as an optional database-path override and otherwise uses `~/.faria/data/faria.db`. Machine-specific paths remain outside committed configuration. Secrets are never hard-coded or committed.
 
 ---
 
@@ -480,7 +480,7 @@ No ADRs exist yet. The technical direction in this document (Hermes, 9Router, Op
 ### Runtime Constraints Discovered During RF-01
 
 - The accepted Hermes topology is a managed macOS installation with a launchd-supervised gateway, not a FARIA-owned application container.
-- Hermes exposes general-purpose tools and skills beyond FARIA's intended household scope. Docker terminal isolation and the egress firewall reduce risk but do not replace a future FARIA-specific tool/skill restriction review (see AQ-07 and `docs/05_operations/CONFIGURATION.md`).
+- RF-03 restricts the Telegram model surface to skills plus `faria-household`; broader developer tools remain limited to the separately configured CLI surface.
 - Rejection of a non-allowlisted Telegram identity has not yet been tested; this is an operational security follow-up, not a claim of acceptance.
 - Hermes stdio MCP does not currently propagate a trustworthy Telegram-user identity to Household MCP; Telegram allowlisting remains the external authentication boundary, and `confirmation_reference` is audit-only.
 
@@ -492,7 +492,7 @@ No ADRs exist yet. The technical direction in this document (Hermes, 9Router, Op
 |---|---|---|
 | Single SQLite file/host is a single point of failure | Household financial data loss if the host fails without backup | Encrypted external backup (destination TBD) before production use |
 | Model/provider behind the `faria-household-main` combo may change | Inconsistent response quality/latency | Keep Hermes decoupled from a specific physical model through the 9Router-owned combo |
-| Hermes exposes tools/skills beyond FARIA's intended household scope | A household request could reach unnecessary general-purpose capability | Keep terminal execution sandboxed with egress filtering and define tighter FARIA tool/skill restrictions in a later hardening batch |
+| Future Hermes configuration drift broadens Telegram tools | A household request could reach unnecessary general-purpose capability | Re-check `hermes tools list --platform telegram` after runtime upgrades and keep only skills plus `faria-household` |
 
 ---
 
@@ -506,7 +506,7 @@ No ADRs exist yet. The technical direction in this document (Hermes, 9Router, Op
 | AQ-04 | Encrypted backup destination and mechanism | Before production use | Household |
 | AQ-05 | Dashboard framework specifics beyond "React/Next.js" (state management, exact API style) | Before dashboard implementation | Implementation |
 | AQ-06 | Whether personas ever become independent agents | Only if real requirements justify it | Household / Implementation |
-| AQ-07 | How Hermes tools and skills will be restricted to FARIA's intended household scope beyond Docker terminal isolation and egress filtering | Before routine shared-household use | Implementation |
+| AQ-07 | Telegram tool restriction approach | Resolved in RF-03: per-platform Hermes toolsets expose skills plus `faria-household`; CLI remains separate | Implementation |
 
 When resolved, create an ADR if the decision is architecturally material.
 
@@ -534,6 +534,7 @@ Do not update this document for routine internal refactoring that preserves the 
 
 | Version | Date | Change | Author |
 |---|---|---|---|
+| 0.4 | `2026-09-12` | Added the repo-owned FARIA identity/Finance skill and restricted Telegram tool/skill surface from RF-03 | sipratama |
 | 0.3 | `2026-09-12` | Recorded the RF-02 Household MCP, SQLite migration strategy, tool surface, and confirmation/identity boundaries | sipratama |
 | 0.2 | `2026-09-12` | Aligned local runtime topology and RF-01 acceptance with the verified managed Hermes/launchd/9Router setup | sipratama |
 | 0.1 | `2026-09-11` | Initial draft | sipratama |

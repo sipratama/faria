@@ -4,7 +4,7 @@ FARIA (FArah RIzkia Ananda) is a private, single-household **AI Household Operat
 
 ## Status
 
-Personal MVP with RF-01 runtime connectivity and the RF-02 monthly-allocation core implemented. The accepted local runtime uses managed Hermes on macOS, a launchd-supervised Telegram gateway, and 9Router through Docker/OrbStack. Household MCP now provides a constrained Python stdio server backed by SQLite; Telegram allocation orchestration, the Finance skill, and the dashboard remain deferred.
+Personal MVP with RF-01 runtime connectivity, the RF-02 monthly-allocation core, and the RF-03 Finance conversation slice implemented. The accepted local runtime uses managed Hermes on macOS, a launchd-supervised Telegram gateway, and 9Router through Docker/OrbStack. Household MCP provides a constrained Python stdio server backed by SQLite, while the repo-owned FARIA identity and Finance skill orchestrate draft review and explicit confirmation. The dashboard remains deferred.
 
 ## What FARIA Does (V1)
 
@@ -19,11 +19,11 @@ FARIA manages **allocations and goals, not transactions** — it deliberately do
 
 ## Architecture Summary
 
-One Hermes agent runtime orchestrates four logical personas (Finance, Giving, Home Ops, Planner) as skills — not independent agents — routed through 9Router to OpenRouter for model access. Authoritative household state lives in SQLite behind a constrained Household MCP tool boundary, with no raw SQL access for the LLM. Hermes terminal execution is isolated in Docker; tighter restriction of its broader tools and skills remains a security follow-up. A React/Next.js dashboard reads state through an application/API boundary. See `docs/02_architecture/SYSTEM_ARCHITECTURE.md` for the full picture.
+One Hermes agent runtime orchestrates four logical personas (Finance, Giving, Home Ops, Planner) as skills — not independent agents — routed through 9Router to OpenRouter for model access. RF-03 implements the first Finance skill and restricts the household Telegram surface to the skills toolset plus the four `faria-household` MCP tools; the developer CLI keeps its broader tool surface. Authoritative household state lives in SQLite behind that constrained MCP boundary, with no raw SQL or shell access from Telegram. A React/Next.js dashboard remains a later read path. See `docs/02_architecture/SYSTEM_ARCHITECTURE.md` for the full picture.
 
 ## First Vertical Slice
 
-**Monthly Allocation**: RF-02 implements and tests the deterministic Household MCP + SQLite segment: save a non-authoritative draft, explicitly confirm it, and query the resulting authoritative state. The Telegram/Hermes conversational segment and dashboard reflection remain later slices. See `docs/01_features/monthly-allocation.md`.
+**Monthly Allocation**: RF-03 adds natural-language Hermes orchestration to the deterministic Household MCP + SQLite core: ask for missing household decisions, save and display a non-authoritative draft, reject ambiguous acknowledgement as confirmation, and confirm only after explicit wording. Dashboard reflection remains deferred. See `docs/01_features/monthly-allocation.md`.
 
 ## Documentation Map
 
@@ -45,4 +45,4 @@ Hermes (agent runtime) · 9Router (model gateway) · OpenRouter (model provider)
 
 ## Setup
 
-RF-01 established Telegram → Hermes Gateway → 9Router → model. RF-02 adds Hermes → Household MCP → SQLite for monthly allocation. See `docs/05_operations/DEVELOPER_SETUP.md` for local installation, testing, and Hermes MCP registration, and `scripts/runtime/README.md` for RF-01 runtime checks.
+RF-01 established Telegram → Hermes Gateway → 9Router → model. RF-02 added Hermes → Household MCP → SQLite, and RF-03 adds the repo-owned FARIA SOUL, Finance skill discovery, and Telegram tool restriction. See `docs/05_operations/DEVELOPER_SETUP.md` for local activation and testing, and `scripts/runtime/README.md` for RF-01 runtime checks.

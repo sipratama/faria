@@ -111,7 +111,7 @@ Dashboard merefleksikan state terbaru
 ### Alternate Flow — AF-01 (User meminta koreksi sebelum konfirmasi)
 
 1. User merespons dengan koreksi (misalnya nominal savings yang berbeda).
-2. Hermes membuat ulang draft dengan nilai yang dikoreksi dan menampilkannya kembali untuk konfirmasi.
+2. Hermes mengambil draft aktif, mempertahankan nilai lain, menyimpan hanya koreksi yang diminta, lalu menampilkan draft lengkap kembali untuk konfirmasi eksplisit baru.
 
 ### Alternate Flow — AF-02 (User tidak mengonfirmasi)
 
@@ -141,15 +141,16 @@ P0
 ### FR-ALLOC-002 — Generate Draft Allocation
 
 **Requirement**
-FARIA harus menghasilkan draft allocation untuk zakat, sedekah, savings, household operating budget, dan personal allowance, berdasarkan allocation rules household yang sedang dikonfigurasi.
+FARIA harus menghasilkan draft allocation untuk zakat, sedekah, savings, household operating budget, dan personal allowance dari nilai atau rules yang telah diberikan secara eksplisit oleh household.
 
 **Rationale**
 Household tidak seharusnya menghitung ulang setiap bucket secara manual setiap bulan.
 
 **Acceptance Criteria**
 
-- Given income bulanan tercatat dan allocation rules household sudah ada, when Hermes menghasilkan draft, then draft mencakup line item zakat, sedekah, savings, household budget, dan allowance.
+- Given income bulanan dan seluruh nilai intended telah diberikan, when Hermes menghasilkan draft, then draft mencakup line item zakat, sedekah, savings, household budget, dan allowance.
 - Given belum ada allocation rule yang dikonfigurasi untuk suatu bucket, when draft dihasilkan, then bucket tersebut ditampilkan ke user sebagai perlu input eksplisit, bukan nilai tebakan.
+- Given household belum memutuskan bahwa remainder menjadi buffer, when Hermes menghitung remainder, then nilai tersebut ditampilkan sebagai belum dialokasikan dan tidak diam-diam disimpan sebagai buffer.
 
 **Priority**
 P0
@@ -181,6 +182,7 @@ Ini adalah human-authority boundary inti FARIA (lihat PRD PR-001).
 
 - Given draft allocation sudah ditampilkan, when user belum mengonfirmasi, then tidak ada authoritative allocation record untuk periode tersebut.
 - Given user mengonfirmasi secara eksplisit, when Hermes memanggil Household MCP, then allocation persisted dan ditandai confirmed.
+- Given user hanya mengirim acknowledgement ambigu seperti `sip`, `oke`, atau emoji, when Hermes memproses pesan, then draft tetap `DRAFT` dan tool confirm tidak dipanggil.
 
 **Priority**
 P0
@@ -208,7 +210,7 @@ P1
 |---|---|
 | BR-01 | Draft allocation tidak berpengaruh terhadap authoritative household state apa pun sebelum dikonfirmasi. |
 | BR-02 | Hanya identitas Telegram yang allowlisted yang dapat membuat atau mengonfirmasi allocation. |
-| BR-03 | Satu periode allocation (misalnya satu bulan kalender) hanya boleh memiliki maksimal satu confirmed allocation; re-konfirmasi untuk periode yang sama diperlakukan sebagai keputusan update, bukan overwrite diam-diam. |
+| BR-03 | Satu periode allocation hanya boleh memiliki maksimal satu confirmed allocation; edit atau replacement setelah Confirmed berada di luar scope V1 dan tidak boleh dilakukan diam-diam. |
 
 ---
 
@@ -223,7 +225,7 @@ P1
 ### State Invariants
 
 - Hanya Confirmed allocation yang digunakan sebagai source of truth untuk status household budget/allowance/zakat/sedekah/savings-contribution periode tersebut.
-- Draft tidak pernah memblokir atau menimpa Confirmed allocation yang sudah ada untuk periode yang sama tanpa intent eksplisit user.
+- Draft tidak pernah menimpa Confirmed allocation yang sudah ada untuk periode yang sama; edit/replacement setelah Confirmed berada di luar scope V1.
 
 ---
 
@@ -301,7 +303,7 @@ Required states yang relevan:
 ### UX Rules
 
 - Draft tidak boleh pernah auto-confirmed secara diam-diam.
-- Konfirmasi harus berupa respons afirmatif yang jelas, bukan default yang diasumsikan.
+- Konfirmasi harus jelas merujuk ke draft terakhir dan setara dengan `Konfirmasi alokasi`; acknowledgement umum seperti `sip`, `oke`, atau emoji tidak cukup.
 
 ### Accessibility
 
@@ -314,7 +316,7 @@ Required states yang relevan:
 | ID | Scenario | Expected Behavior |
 |---|---|---|
 | EC-01 | User mengirim pesan income dua kali untuk periode yang sama | FARIA memperlakukan pesan kedua sebagai update draft yang sama, bukan allocation duplikat |
-| EC-02 | User mengonfirmasi padahal sudah ada Confirmed allocation untuk periode tersebut | FARIA menanyakan apakah ini harus menggantikan confirmed allocation yang ada, bukan menimpanya diam-diam |
+| EC-02 | User meminta perubahan padahal sudah ada Confirmed allocation untuk periode tersebut | FARIA menjelaskan bahwa periode sudah authoritative dan edit/replacement berada di luar scope V1 |
 | EC-03 | Household MCP tidak tersedia saat konfirmasi | FARIA melaporkan kegagalan dan tidak mengklaim allocation telah persisted |
 | EC-04 | Pesan dari identitas Telegram yang tidak allowlisted | FARIA tidak memproses request tersebut |
 
@@ -356,7 +358,9 @@ Required states yang relevan:
 |---|---|---|---|
 | T-001 | `FR-ALLOC-002` | Unit | Draft allocation dihasilkan dengan benar dari rules yang dikonfigurasi |
 | T-002 | `FR-ALLOC-004` | Integration | Draft yang tersimpan tetap non-authoritative sampai tool confirm dipanggil |
-| T-003 | `FR-ALLOC-004` | Integration | Pengirim non-allowlisted tidak dapat mengonfirmasi allocation (deferred ke Telegram/orchestration slice RF-03) |
+| T-003 | `FR-ALLOC-004` | Operational acceptance | Pengirim non-allowlisted tidak dapat mengonfirmasi allocation (pending actual non-allowlisted identity test) |
+| T-004 | `FR-ALLOC-001`, `FR-ALLOC-002` | Conversational acceptance | Income tanpa nilai alokasi memicu satu grouped clarification dan tidak membuat draft |
+| T-005 | `FR-ALLOC-004` | Conversational acceptance | Acknowledgement ambigu mempertahankan DRAFT; hanya konfirmasi eksplisit menghasilkan CONFIRMED |
 
 ### Minimum Regression Coverage
 
@@ -389,7 +393,7 @@ Koreksi schema yang sudah diterapkan dilakukan lewat forward version-controlled 
 ### Upstream
 - Implementasi Household MCP server.
 - Integrasi bot Telegram.
-- Hermes skill untuk intent allocation.
+- Repo-owned Hermes Finance skill dan konfigurasi external skill directory.
 
 ### Downstream
 - Savings & Goals (`CAP-SAVE-001`), Zakat & Sedekah (`CAP-GIVE-001`) dibangun di atas allocation record yang sama setelah persisted.
@@ -426,5 +430,6 @@ Koreksi schema yang sudah diterapkan dilakukan lewat forward version-controlled 
 
 | Version | Date | Change | Author |
 |---|---|---|---|
+| 0.3 | `2026-09-12` | Added RF-03 conversation, correction, remainder, explicit-confirmation, and confirmed-period behavior | sipratama |
 | 0.2 | `2026-09-12` | Recorded the RF-02 MCP tool surface and clarified draft persistence, period, identity, and confirmation boundaries | sipratama |
 | 0.1 | `2026-09-11` | Initial draft | sipratama |
