@@ -115,7 +115,7 @@ uv sync
 uv run pytest
 ```
 
-The server uses local stdio transport and exposes exactly twelve constrained allocation/rules/savings/giving tools. Its default database is `~/.faria/data/faria.db`; set `FARIA_DB_PATH` only when an isolated database is required. Tests always use temporary databases.
+The server uses local stdio transport and exposes exactly eighteen constrained finance/routine tools. Its default database is `~/.faria/data/faria.db`; set `FARIA_DB_PATH` only when an isolated database is required. Tests always use temporary databases.
 
 ## 8. Register Household MCP with Hermes
 
@@ -141,6 +141,12 @@ savings_goal_get
 savings_contribution_record
 giving_list
 giving_record
+routine_list
+routine_get
+routine_create
+routine_scheduler_link
+routine_complete
+routine_cancel
 ```
 
 Also set `mcp_servers.faria-household.sampling.enabled` to `false`, because this deterministic domain server never requests model sampling. Then verify:
@@ -196,13 +202,14 @@ scripts/runtime/check-runtime.sh
 
 See `scripts/runtime/README.md` for the recorded manual acceptance evidence and the still-unverified unauthorized-identity rejection check.
 
-## 11. Activate FARIA Identity and Finance Skill
+## 11. Activate FARIA Identity and Skills
 
 The repository owns the canonical runtime behavior:
 
 ```text
 agent/prompts/SOUL.md
 agent/skills/faria-finance/SKILL.md
+agent/skills/faria-home-ops/SKILL.md
 ```
 
 Copy the canonical SOUL to the active FARIA profile's Hermes home, then configure that same profile's `skills.external_dirs` with the absolute local path to `agent/skills`. The absolute checkout path is operational configuration and must not be committed. Verify discovery:
@@ -212,7 +219,7 @@ hermes skills list --source local
 hermes mcp test faria-household
 ```
 
-The `faria-finance` skill remains naturally discoverable from ordinary household language; a slash command is not required. Hermes v0.21.2 does not reliably expose MCP toolset availability to external-skill discovery conditions, so the skill documents the twelve `faria-household` tools as a runtime prerequisite rather than using `requires_toolsets` frontmatter.
+The `faria-finance` and `faria-home-ops` skills remain naturally discoverable from ordinary household language; slash commands are not required. Hermes v0.21.2 does not reliably expose MCP toolset availability to external-skill discovery conditions, so each skill documents its `faria-household` prerequisites instead of using `requires_toolsets` frontmatter.
 
 ### Configure Household Member Identity
 
@@ -222,7 +229,7 @@ For a Telegram private DM, Hermes resolves `channel_prompts` from the DM chat ID
 
 ## 12. Restrict and Refresh Telegram
 
-Use `hermes tools enable|disable --platform telegram` so the effective Telegram surface contains only `skills` and the twelve configured `faria-household` tools. In particular, verify these are disabled:
+Use supported Hermes configuration/tool commands so the effective Telegram surface contains only `skills`, `cronjob`, and the eighteen configured primary `faria-household` tools. Explicitly scope Telegram to the primary alias so it does not inherit the cron read-only alias. In particular, verify these are disabled:
 
 ```text
 terminal, file, browser, web, code_execution, delegation, computer_use
@@ -230,7 +237,7 @@ terminal, file, browser, web, code_execution, delegation, computer_use
 
 Do not apply this restriction to the developer CLI.
 
-Also use Hermes' per-platform skill configuration so Telegram enables `faria-finance` and disables unrelated installed skills. Hermes' essential `hermes-agent` operating skill cannot be disabled and may remain visible. Do not disable the developer CLI's skill catalog as part of this persistent configuration.
+Also use Hermes' per-platform skill configuration so Telegram enables `faria-finance` and `faria-home-ops` and disables unrelated installed skills. Hermes' essential `hermes-agent` operating skill cannot be disabled and may remain visible. Do not disable the developer CLI's skill catalog as part of this persistent configuration.
 
 After SOUL, skill, MCP, toolset, or skill-visibility changes, run:
 
@@ -241,7 +248,52 @@ hermes tools list --platform telegram
 
 Use a fresh Telegram session for final acceptance. Run CLI pre-acceptance with an isolated `FARIA_DB_PATH` and synthetic future-period values; restore the normal MCP configuration and delete the temporary database afterward.
 
-## 13. Related Documents
+## 13. Configure and Verify Household Cron
+
+Hermes v0.21.2 supports one-shot timestamps, five-field cron schedules, pause/resume/remove, manual run, attached skills, per-job `enabled_toolsets`, pinned cron models, and `origin` delivery. Configure local runtime state without committing `~/.hermes/config.yaml`:
+
+```bash
+hermes config set timezone Asia/Jakarta
+hermes config set cron.model faria-household-main
+hermes config set platform_toolsets.telegram '["skills", "cronjob", "faria-household"]'
+hermes config set platform_toolsets.cron '["skills", "faria-household-cron-readonly"]'
+```
+
+From `household-mcp/`, register the same implementation under a read-only alias and restrict it:
+
+```bash
+hermes mcp add faria-household-cron-readonly \
+  --command "$(pwd)/.venv/bin/faria-household-mcp"
+hermes config set mcp_servers.faria-household-cron-readonly.tools.include '["routine_get"]'
+hermes config set mcp_servers.faria-household-cron-readonly.sampling.enabled false
+```
+
+Verify effective surfaces and discovery:
+
+```bash
+hermes mcp test faria-household
+hermes mcp test faria-household-cron-readonly
+hermes mcp list
+hermes skills list --source local
+hermes tools list --platform telegram
+hermes tools list --platform cron
+hermes cron status
+hermes cron list
+```
+
+Routine cron jobs must use `deliver=origin`, attach `faria-home-ops`, and explicitly set per-job toolsets to `skills` and `mcp-faria-household-cron-readonly`. The self-contained prompt reads `routine_get` and emits only `[SILENT]` unless authoritative state is `ACTIVE`.
+
+For local acceptance, temporarily point both aliases to an isolated `FARIA_DB_PATH`, create only synthetic routines/jobs, and restore the normal MCP configuration afterward. Safe cleanup is:
+
+```bash
+hermes cron list
+hermes cron remove <synthetic-job-id>
+hermes cron status
+```
+
+Delete the temporary database only after every synthetic job is removed. Restart the gateway with the installed supported command, then confirm a synthetic recurring job remains listed before final cleanup. Never use the household's real database for acceptance and never commit cron job IDs, Telegram IDs, `jobs.json`, or runtime SQLite files.
+
+## 14. Related Documents
 
 - `docs/05_operations/CONFIGURATION.md`
 - `scripts/runtime/README.md`

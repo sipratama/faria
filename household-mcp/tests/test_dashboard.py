@@ -7,6 +7,7 @@ from faria_household_mcp.dashboard import DashboardQueryService
 from faria_household_mcp.database import HouseholdDatabase
 from faria_household_mcp.giving import GivingService
 from faria_household_mcp.monitoring import MonitoringService
+from faria_household_mcp.routines import RoutineService
 from faria_household_mcp.savings import SavingsService
 
 
@@ -25,7 +26,7 @@ def test_empty_dashboard_reports_only_observable_state(tmp_path) -> None:
     assert [(persona.persona, persona.activated, persona.status) for persona in dashboard.personas] == [
         ("FINANCE", True, "IDLE"),
         ("GIVING", True, "IDLE"),
-        ("HOME_OPS", False, "NOT_ACTIVATED"),
+        ("HOME_OPS", True, "IDLE"),
         ("PLANNER", False, "NOT_ACTIVATED"),
     ]
     assert dashboard.pending_confirmations == ()
@@ -33,6 +34,8 @@ def test_empty_dashboard_reports_only_observable_state(tmp_path) -> None:
     assert dashboard.household_snapshot.monthly_allocation.latest_confirmed_period is None
     assert dashboard.household_snapshot.savings.active_goal_count == 0
     assert dashboard.household_snapshot.giving.current_period_count == 0
+    assert dashboard.household_snapshot.home_ops.active_routine_count == 0
+    assert dashboard.household_snapshot.home_ops.next_routine is None
 
 
 def test_dashboard_uses_authoritative_household_data_and_draft_confirmation(tmp_path) -> None:
@@ -65,3 +68,37 @@ def test_dashboard_uses_authoritative_household_data_and_draft_confirmation(tmp_
     assert dashboard.household_snapshot.giving.latest_type == "sedekah"
     assert dashboard.recent_activities[0].summary == "Sedekah giving recorded."
     assert active_goal.status == "ACTIVE"
+
+
+def test_dashboard_projects_next_active_routine_from_sqlite(tmp_path) -> None:
+    database = HouseholdDatabase(tmp_path / "faria.db")
+    routines = RoutineService(database, clock=lambda: NOW)
+    later = routines.create(
+        "Synthetic quarterly check", "RECURRING", "0 10 1 */3 *", "Asia/Jakarta"
+    )
+    next_routine = routines.create(
+        "Synthetic gallon check",
+        "ONE_OFF",
+        "2099-01-15T19:00:00+07:00",
+        "Asia/Jakarta",
+    )
+    cancelled = routines.create(
+        "Synthetic cancelled", "RECURRING", "0 9 * * *", "Asia/Jakarta"
+    )
+    routines.link_scheduler(later.routine_id, "cron-later")
+    routines.link_scheduler(next_routine.routine_id, "cron-next")
+    routines.link_scheduler(cancelled.routine_id, "cron-cancelled")
+    routines.cancel(cancelled.routine_id)
+
+    dashboard = DashboardQueryService(database, clock=lambda: NOW).get_dashboard()
+    home_ops = dashboard.household_snapshot.home_ops
+
+    assert home_ops.active_routine_count == 2
+    assert home_ops.next_routine is not None
+    assert home_ops.next_routine.routine_id == next_routine.routine_id
+    assert home_ops.next_routine.title == "Synthetic gallon check"
+    assert home_ops.next_routine.next_due_at == "2099-01-15T19:00:00+07:00"
+    assert dashboard.personas[2].persona == "HOME_OPS"
+    assert dashboard.personas[2].activated is True
+    assert dashboard.personas[3].persona == "PLANNER"
+    assert dashboard.personas[3].activated is False

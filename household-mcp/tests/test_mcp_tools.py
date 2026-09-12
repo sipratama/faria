@@ -11,7 +11,7 @@ from faria_household_mcp.monitoring import MonitoringService
 from faria_household_mcp.server import TOOL_NAMES, create_server
 
 
-def test_server_exposes_exactly_twelve_constrained_household_tools(tmp_path) -> None:
+def test_server_exposes_exactly_eighteen_constrained_household_tools(tmp_path) -> None:
     async def scenario() -> None:
         async with Client(create_server(tmp_path / "faria.db")) as client:
             result = await client.list_tools()
@@ -55,8 +55,76 @@ def test_server_exposes_exactly_twelve_constrained_household_tools(tmp_path) -> 
                 "monthly_allocation_reference",
                 "note",
             }
+            assert set(tools["routine_list"].input_schema["properties"]) == {
+                "include_inactive"
+            }
+            assert set(tools["routine_get"].input_schema["properties"]) == {"routine_id"}
+            assert set(tools["routine_create"].input_schema["properties"]) == {
+                "title",
+                "schedule_kind",
+                "schedule_expression",
+                "timezone",
+                "description",
+            }
+            assert set(tools["routine_scheduler_link"].input_schema["properties"]) == {
+                "routine_id",
+                "scheduler_job_id",
+            }
+            assert set(tools["routine_complete"].input_schema["properties"]) == {"routine_id"}
+            assert set(tools["routine_cancel"].input_schema["properties"]) == {"routine_id"}
+
+            assert len(tools) == 18
 
     asyncio.run(scenario())
+
+
+def test_routine_tools_cover_pending_link_complete_and_monitoring(tmp_path) -> None:
+    database_path = tmp_path / "faria.db"
+
+    async def scenario() -> None:
+        async with Client(create_server(database_path)) as client:
+            created_result = await client.call_tool(
+                "routine_create",
+                {
+                    "title": "Synthetic recurring",
+                    "schedule_kind": "RECURRING",
+                    "schedule_expression": "0 9 20 * *",
+                    "timezone": "Asia/Jakarta",
+                },
+            )
+            assert created_result.is_error is False
+            created = created_result.structured_content
+            assert created["status"] == "PENDING_SCHEDULE"
+
+            linked_result = await client.call_tool(
+                "routine_scheduler_link",
+                {
+                    "routine_id": created["routine_id"],
+                    "scheduler_job_id": "cron-synthetic",
+                },
+            )
+            assert linked_result.is_error is False
+            assert linked_result.structured_content["status"] == "ACTIVE"
+
+            completed_result = await client.call_tool(
+                "routine_complete", {"routine_id": created["routine_id"]}
+            )
+            assert completed_result.is_error is False
+            assert completed_result.structured_content["status"] == "ACTIVE"
+
+            get_result = await client.call_tool(
+                "routine_get", {"routine_id": created["routine_id"]}
+            )
+            assert get_result.is_error is False
+            assert get_result.structured_content["last_completed_at"] is not None
+
+    asyncio.run(scenario())
+    activities = MonitoringService(HouseholdDatabase(database_path)).list_recent()
+    assert [activity.activity_type for activity in activities[:3]] == [
+        "HOUSEHOLD_ROUTINE_COMPLETED",
+        "HOUSEHOLD_ROUTINE_SCHEDULER_LINKED",
+        "HOUSEHOLD_ROUTINE_CREATED",
+    ]
 
 
 def test_tools_complete_draft_confirm_and_get_flow(tmp_path) -> None:

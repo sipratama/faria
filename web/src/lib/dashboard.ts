@@ -3,7 +3,7 @@ export type PersonaStatus = "IDLE" | "WORKING" | "ERROR" | "NOT_ACTIVATED";
 
 export interface AgentActivity {
   activityId: string;
-  persona: "FINANCE" | "GIVING";
+  persona: "FINANCE" | "GIVING" | "HOME_OPS";
   activityType: string;
   status: "SUCCEEDED" | "FAILED";
   summary: string;
@@ -56,6 +56,16 @@ export interface DashboardData {
       latestType: "zakat_penghasilan" | "sedekah" | null;
       latestPeriod: string | null;
       latestRecordedAt: string | null;
+    };
+    homeOps: {
+      activeRoutineCount: number;
+      nextRoutine: {
+        routineId: string;
+        title: string;
+        scheduleKind: "ONE_OFF" | "RECURRING";
+        nextDueAt: string;
+        timezone: "Asia/Jakarta";
+      } | null;
     };
   };
   recentActivities: AgentActivity[];

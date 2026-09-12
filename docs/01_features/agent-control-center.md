@@ -66,11 +66,13 @@ Dashboard menunjukkan hanya health yang dapat diobservasi. Hermes Gateway, 9Rout
 ### FR-DASH-002 — Show Logical Persona State
 
 **Requirement**
-Dashboard menampilkan Finance dan Giving sebagai logical persona dalam satu FARIA runtime. Home Ops dan Planner selalu terlihat `NOT_ACTIVATED` selama capability tersebut belum diaktifkan.
+Dashboard menampilkan Finance, Giving, dan Home Ops sebagai logical persona dalam satu FARIA runtime. Planner tetap terlihat `NOT_ACTIVATED` sampai capability tersebut diaktifkan.
 
 **Acceptance Criteria**
 
-- Finance/Giving dapat menunjukkan Idle, Working, atau Error dari current monitoring state.
+- Finance/Giving/Home Ops dapat menunjukkan Idle, Working, atau Error dari current monitoring state.
+- Home Ops menampilkan active routine count dan next active routine dari authoritative SQLite schedule state.
+- Planner tetap `NOT_ACTIVATED`.
 - UI tidak menyiratkan bahwa empat independent autonomous agents berjalan.
 
 ### FR-DASH-003 — Show Recent Agent Activity
@@ -97,11 +99,12 @@ Pending confirmations hanya berasal dari authoritative persisted state yang dapa
 ### FR-DASH-005 — Show Small Household Snapshot
 
 **Requirement**
-Dashboard menampilkan snapshot read-only yang terbatas pada latest confirmed monthly allocation, savings-goal counts, dan giving summary yang tersedia dari authoritative state.
+Dashboard menampilkan snapshot read-only yang terbatas pada latest confirmed monthly allocation, savings-goal counts, giving summary, dan Home Ops routine summary yang tersedia dari authoritative state.
 
 **Acceptance Criteria**
 
-- Snapshot mencerminkan persisted confirmed allocation, savings, dan giving data.
+- Snapshot mencerminkan persisted confirmed allocation, savings, giving, dan active routine data.
+- Next routine dihitung dari canonical schedule di SQLite, bukan Hermes cron runtime files.
 - Missing data ditampilkan sebagai belum tersedia atau nilai kosong yang jujur, bukan nilai household yang dibuat-buat.
 
 ### FR-DASH-006 — Remain Strictly Read-Only
@@ -154,7 +157,7 @@ Ketika data kosong, dashboard menampilkan empty state yang eksplisit. Ketika API
 ## 6. Minimum Regression Coverage
 
 - Observable health and unmonitored integrations.
-- Active Finance/Giving versus inactive Home Ops/Planner.
+- Active Finance/Giving/Home Ops versus inactive Planner.
 - Empty and populated activity/pending-confirmation states.
 - Persisted household snapshot projection.
 - Read-only API surface and absence of financial action controls.
@@ -175,3 +178,4 @@ Ketika data kosong, dashboard menampilkan empty state yang eksplisit. Ketika API
 | Version | Date | Change | Author |
 |---|---|---|---|
 | 1.0 | `2026-09-12` | Added RF-05 authoritative feature behavior and acceptance closure | sipratama |
+| 1.1 | `2026-09-12` | Activated Home Ops and SQLite-derived next routine visibility for RF-06 | sipratama |

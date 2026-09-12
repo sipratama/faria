@@ -173,6 +173,18 @@ wheels = [
 ]
 
 [[package]]
+name = "croniter"
+version = "6.0.0"
+source = { registry = "/tmp/faria-wheels.Jy8PbI" }
+dependencies = [
+    { name = "python-dateutil" },
+    { name = "pytz" },
+]
+wheels = [
+    { path = "/tmp/faria-wheels.Jy8PbI/croniter-6.0.0-py2.py3-none-any.whl" },
+]
+
+[[package]]
 name = "cryptography"
 version = "50.0.1"
 source = { registry = "https://pypi.org/simple" }
@@ -233,6 +245,7 @@ name = "faria-household-mcp"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "croniter" },
     { name = "fastapi" },
     { name = "mcp" },
     { name = "uvicorn" },
@@ -246,6 +259,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "croniter", specifier = ">=6,<7" },
     { name = "fastapi", specifier = ">=0.116,<1" },
     { name = "mcp", specifier = ">=2.2.0,<3" },
     { name = "uvicorn", specifier = ">=0.35,<1" },
@@ -628,12 +642,31 @@ wheels = [
 ]
 
 [[package]]
+name = "python-dateutil"
+version = "2.9.0.post0"
+source = { registry = "/tmp/faria-wheels.Jy8PbI" }
+dependencies = [
+    { name = "six" },
+]
+wheels = [
+    { path = "/tmp/faria-wheels.Jy8PbI/python_dateutil-2.9.0.post0-py2.py3-none-any.whl" },
+]
+
+[[package]]
 name = "python-multipart"
 version = "0.0.32"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/5b/42/55c32bb9b12693c092ad250a0e82edb5b31ddeda6eb772de5f308b3804ad/python_multipart-0.0.32.tar.gz", hash = "sha256:be54b7f3fa167bb83e4fcd936b887b708f4e57fe75911c02aebf53efaf8d938e", size = 46881, upload-time = "2026-06-04T16:18:58.647Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e1/04/e8135ebd1ad02c56ec633277529b2602ff99ff634be76cdba5744cf554fd/python_multipart-0.0.32-py3-none-any.whl", hash = "sha256:ff6d3f776f16878c894e52e107296ffc890e913c611b1a4ec6c44e2821fe2e23", size = 30042, upload-time = "2026-06-04T16:18:57.319Z" },
+]
+
+[[package]]
+name = "pytz"
+version = "2025.2"
+source = { registry = "/tmp/faria-wheels.Jy8PbI" }
+wheels = [
+    { path = "/tmp/faria-wheels.Jy8PbI/pytz-2025.2-py2.py3-none-any.whl" },
 ]
 
 [[package]]
@@ -793,6 +826,14 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/9c/97/0043896fdd7828ce09a1d9a8b06433714d0960fc4ff3fc4aa72b666b764e/rpds_py-2026.6.3-pp311-pypy311_pp73-musllinux_1_2_aarch64.whl", hash = "sha256:2bfd04c19ddbd6640de0b51894d764bd2758854d5b75bd102d2ef10cb9c293a9", size = 558118, upload-time = "2026-06-30T07:17:47.759Z" },
     { url = "https://files.pythonhosted.org/packages/f6/40/02355f0e134f783a8f9814c4680a1bd311d37671577a5964ea838573ff37/rpds_py-2026.6.3-pp311-pypy311_pp73-musllinux_1_2_i686.whl", hash = "sha256:ca6546b66be9dc4738b1b043d5ebd5488c66c578c5ff0fd0e8065313fe3afb76", size = 623138, upload-time = "2026-06-30T07:17:49.355Z" },
     { url = "https://files.pythonhosted.org/packages/10/85/48f0abdcef5cce4e034c7a5b0ceeceba0b01bf0d942824f4bb720afe2dec/rpds_py-2026.6.3-pp311-pypy311_pp73-musllinux_1_2_x86_64.whl", hash = "sha256:8e65860d238379ed982fd9ba690579b5e95af2f4840f99c772816dbe573cb826", size = 586486, upload-time = "2026-06-30T07:17:51.141Z" },
+]
+
+[[package]]
+name = "six"
+version = "1.17.0"
+source = { registry = "/tmp/faria-wheels.Jy8PbI" }
+wheels = [
+    { path = "/tmp/faria-wheels.Jy8PbI/six-1.17.0-py2.py3-none-any.whl" },
 ]
 
 [[package]]

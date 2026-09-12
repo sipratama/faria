@@ -21,6 +21,7 @@ def test_active_personas_initialize_idle_without_fake_inactive_state(database) -
     assert [(state.persona, state.status) for state in states] == [
         ("FINANCE", "IDLE"),
         ("GIVING", "IDLE"),
+        ("HOME_OPS", "IDLE"),
     ]
 
 

@@ -4,7 +4,7 @@ FARIA (FArah RIzkia Ananda) is a private, single-household **AI Household Operat
 
 ## Status
 
-Personal MVP through RF-05: runtime connectivity, household finance foundations, agent monitoring, and the local read-only Agent Control Center are implemented. Household MCP remains the sole mutation authority over SQLite; a separate loopback-only FastAPI process provides three purpose-built GET endpoints to the Next.js dashboard. Telegram remains the primary interaction and financial-mutation interface.
+Personal MVP through RF-06: runtime connectivity, household finance foundations, household routines/reminders, agent monitoring, and the local read-only Agent Control Center are implemented. Household MCP remains the sole mutation authority over SQLite; Hermes Cron is only the reminder scheduling/delivery engine. A separate loopback-only FastAPI process provides three purpose-built GET endpoints to the Next.js dashboard. Telegram remains the primary interaction and mutation interface.
 
 ## What FARIA Does (V1)
 
@@ -19,7 +19,7 @@ FARIA manages **allocations and goals, not transactions** — it deliberately do
 
 ## Architecture Summary
 
-One Hermes agent runtime orchestrates four logical personas (Finance, Giving, Home Ops, Planner) as skills — not independent agents — routed through 9Router to OpenRouter for model access. The Finance skill covers allocation, rules, savings, and giving through exactly twelve `faria-household` MCP tools. Authoritative household state lives in SQLite behind that constrained MCP boundary. The React/Next.js dashboard reads only through a separate FastAPI query boundary and clearly marks Home Ops, Planner, Gateway, 9Router, and AI usage according to what is actually observable.
+One Hermes agent runtime orchestrates four logical personas (Finance, Giving, Home Ops, Planner) as skills — not independent agents — routed through 9Router to OpenRouter for model access. Finance and Home Ops use exactly eighteen constrained `faria-household` MCP tools. Authoritative household state lives in SQLite behind that boundary; Hermes Cron stores only runtime scheduling/delivery machinery. The React/Next.js dashboard reads only through a separate FastAPI query boundary, activates Home Ops from persisted persona state, and keeps Planner and unobservable integrations honestly inactive/unmonitored.
 
 ## First Vertical Slice
 
@@ -34,6 +34,7 @@ One Hermes agent runtime orchestrates four logical personas (Finance, Giving, Ho
 | `docs/01_features/monthly-allocation.md` | Monthly allocation PLAN behavior |
 | `docs/01_features/savings-goals.md` | Savings goals and ACTUAL contributions |
 | `docs/01_features/giving.md` | Household rules and ACTUAL giving records |
+| `docs/01_features/household-routines.md` | Household routine/reminder lifecycle and confirmation behavior |
 | `docs/02_architecture/SYSTEM_ARCHITECTURE.md` | System structure, trust boundaries |
 | `docs/02_architecture/DATA_MODEL.md` | Domain entities and ownership |
 | `AGENTS.md` | Rules for AI coding agents working in this repo |
@@ -47,4 +48,4 @@ Hermes (agent runtime) · 9Router (model gateway) · OpenRouter (model provider)
 
 ## Setup
 
-RF-01 established Telegram → Hermes Gateway → 9Router → model. RF-02 added Hermes → Household MCP → SQLite, RF-03 added the repo-owned identity and Finance skill, RF-04 expanded the constrained surface to twelve finance tools, and RF-05 added monitoring plus the local read-only dashboard. See `docs/05_operations/DEVELOPER_SETUP.md` for activation and testing.
+RF-01 established Telegram → Hermes Gateway → 9Router → model. RF-02 added Hermes → Household MCP → SQLite, RF-03 added the repo-owned identity and Finance skill, RF-04 expanded the constrained finance surface, RF-05 added monitoring plus the local read-only dashboard, and RF-06 adds authoritative routines with Hermes Cron delivery plus Home Ops visibility. See `docs/05_operations/DEVELOPER_SETUP.md` for activation and testing.

@@ -10,6 +10,7 @@ from pydantic.alias_generators import to_camel
 
 from faria_household_mcp.database import HouseholdDatabase
 from faria_household_mcp.monitoring import AgentActivityView, MonitoringService
+from faria_household_mcp.routines import RoutineService
 
 
 HOUSEHOLD_TIMEZONE = ZoneInfo("Asia/Jakarta")
@@ -66,10 +67,24 @@ class GivingSnapshot(DashboardModel):
     latest_recorded_at: str | None
 
 
+class NextRoutineSnapshot(DashboardModel):
+    routine_id: str
+    title: str
+    schedule_kind: Literal["ONE_OFF", "RECURRING"]
+    next_due_at: str
+    timezone: Literal["Asia/Jakarta"]
+
+
+class HomeOpsSnapshot(DashboardModel):
+    active_routine_count: int
+    next_routine: NextRoutineSnapshot | None
+
+
 class HouseholdSnapshot(DashboardModel):
     monthly_allocation: MonthlyAllocationSnapshot
     savings: SavingsSnapshot
     giving: GivingSnapshot
+    home_ops: HomeOpsSnapshot
 
 
 class DashboardSnapshot(DashboardModel):
@@ -95,6 +110,7 @@ class DashboardQueryService:
         self._database = database
         self._monitoring = MonitoringService(database)
         self._clock = clock or (lambda: datetime.now(UTC))
+        self._routines = RoutineService(database, clock=self._clock)
 
     def health(self) -> None:
         self._database.initialize()
@@ -107,6 +123,10 @@ class DashboardQueryService:
         current_period = now.astimezone(HOUSEHOLD_TIMEZONE).strftime("%Y-%m")
         states = self._monitoring.get_active_persona_states()
         state_by_persona = {state.persona: state for state in states}
+        active_routines = tuple(
+            routine for routine in self._routines.list() if routine.status == "ACTIVE"
+        )
+        next_routine = active_routines[0] if active_routines else None
 
         with self._database.connect() as connection:
             pending_rows = connection.execute(
@@ -155,9 +175,12 @@ class DashboardQueryService:
 
         personas = tuple(
             self._active_persona(persona, label, state_by_persona[persona])
-            for persona, label in (("FINANCE", "Finance"), ("GIVING", "Giving"))
+            for persona, label in (
+                ("FINANCE", "Finance"),
+                ("GIVING", "Giving"),
+                ("HOME_OPS", "Home Ops"),
+            )
         ) + (
-            self._inactive_persona("HOME_OPS", "Home Ops"),
             self._inactive_persona("PLANNER", "Planner"),
         )
         if any(persona.status == "ERROR" for persona in personas if persona.activated):
@@ -209,6 +232,20 @@ class DashboardQueryService:
                     latest_period=None if latest_giving is None else latest_giving["period"],
                     latest_recorded_at=(
                         None if latest_giving is None else latest_giving["recorded_at"]
+                    ),
+                ),
+                home_ops=HomeOpsSnapshot(
+                    active_routine_count=len(active_routines),
+                    next_routine=(
+                        None
+                        if next_routine is None or next_routine.next_due_at is None
+                        else NextRoutineSnapshot(
+                            routine_id=next_routine.routine_id,
+                            title=next_routine.title,
+                            schedule_kind=next_routine.schedule_kind,
+                            next_due_at=next_routine.next_due_at,
+                            timezone=next_routine.timezone,
+                        )
                     ),
                 ),
             ),

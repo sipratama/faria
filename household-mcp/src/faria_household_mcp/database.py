@@ -145,7 +145,7 @@ class HouseholdDatabase:
                         last_error_summary, updated_at
                     ) VALUES (?, 'IDLE', NULL, NULL, NULL, ?)
                     """,
-                    (("FINANCE", now), ("GIVING", now)),
+                    (("FINANCE", now), ("GIVING", now), ("HOME_OPS", now)),
                 )
 
     def get_period_state(self, period: str) -> PeriodAllocationView:

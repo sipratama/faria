@@ -1,6 +1,6 @@
 # Configuration — FARIA
 
-> **Scope:** Runtime configuration through RF-05. Hermes and 9Router remain externally managed; FARIA owns the canonical SOUL/Finance skill, Household MCP persistence, and the local read-only dashboard boundary.
+> **Scope:** Runtime configuration through RF-06. Hermes and 9Router remain externally managed; FARIA owns the canonical SOUL/Finance/Home Ops skills, Household MCP persistence, and the local read-only dashboard boundary.
 
 ## 1. Hermes-Managed Configuration
 
@@ -30,6 +30,8 @@ The custom provider endpoint is `http://127.0.0.1:20128/v1`, and the selected lo
 
 The Telegram bot token and explicit allowlist also remain in Hermes-managed configuration. Real numeric Telegram IDs are private operational configuration even though they are not authentication credentials.
 
+Set the FARIA household timezone explicitly to `Asia/Jakarta`; do not rely on the host timezone. Pin scheduled jobs to the logical model path with `cron.model: faria-household-main`. `cron.model_provider` may remain unset when Hermes resolves the same configured custom provider as `model.default`; no physical OpenRouter model belongs in repository documentation.
+
 ## 2. FARIA Repository Configuration
 
 The repository-owned Python and Next.js processes support these optional environment variables:
@@ -47,7 +49,9 @@ Do not duplicate Hermes or 9Router secrets into this repository for convenience.
 
 ### Hermes MCP Registration
 
-Register the local stdio server as `faria-household` through `hermes mcp add`. In Hermes-managed `config.yaml`, restrict `tools.include` to exactly the twelve RF-04 tool names documented in the finance feature specs and set `sampling.enabled: false`. A machine-specific absolute command path is expected locally but must never be copied into repository configuration or documentation as a concrete private path.
+Register the local stdio server as `faria-household` through `hermes mcp add`. In Hermes-managed `config.yaml`, restrict `tools.include` to exactly the eighteen RF-06 tool names documented in the finance and routine feature specs and set `sampling.enabled: false`. A machine-specific absolute command path is expected locally but must never be copied into repository configuration or documentation as a concrete private path.
+
+Register a second local alias, `faria-household-cron-readonly`, pointing to the same stdio server implementation. Its `tools.include` contains only `routine_get`, and sampling remains disabled. This alias does not duplicate backend code; it limits fresh cron sessions so finance writes and routine mutations are unavailable.
 
 The optional `confirmation_reference` tool field is an untrusted audit label. It does not replace the Telegram allowlist and does not prove which user confirmed an allocation.
 
@@ -55,7 +59,7 @@ The optional `confirmation_reference` tool field is an untrusted audit label. It
 
 `agent/prompts/SOUL.md` is the canonical FARIA identity. Synchronize it to the active FARIA profile's Hermes-home `SOUL.md`; this copy is runtime state, not a second independently maintained source.
 
-Configure `skills.external_dirs` in the active Hermes profile with the machine-local absolute path to this repository's `agent/skills`. Do not commit that absolute path. Automatic skill discovery remains enabled so ordinary Indonesian allocation messages can select `faria-finance`.
+Configure `skills.external_dirs` in the active Hermes profile with the machine-local absolute path to this repository's `agent/skills`. Do not commit that absolute path. Automatic skill discovery remains enabled so ordinary Indonesian allocation messages can select `faria-finance` and routine/reminder messages can select `faria-home-ops`.
 
 ### Household Member Identity
 
@@ -67,11 +71,19 @@ Display identity is not authorization identity. The explicit Telegram numeric-ID
 
 ### Telegram Tool Surface
 
-Configure `platform_toolsets.telegram` through supported `hermes tools --platform telegram` commands. Its native toolset is only `skills`; the enabled `faria-household` MCP server contributes exactly the twelve tools in its `tools.include` allowlist. The developer CLI retains its separate tool configuration.
+Configure `platform_toolsets.telegram` through supported Hermes configuration/tool commands with only `skills`, `cronjob`, and the primary `faria-household` MCP server. The primary server contributes exactly the eighteen tools in its `tools.include` allowlist. Explicitly naming it prevents Telegram from inheriting the cron-only alias. The developer CLI retains its separate tool configuration.
 
-Configure `skills.platform_disabled.telegram` through Hermes' per-platform skill configuration so unrelated installed skills are hidden from household Telegram sessions. `faria-finance` remains enabled; Hermes' essential `hermes-agent` skill may also remain visible. This restriction is Telegram-specific and does not remove developer CLI skills.
+Configure `skills.platform_disabled.telegram` through Hermes' per-platform skill configuration so unrelated installed skills are hidden from household Telegram sessions. `faria-finance` and `faria-home-ops` remain enabled; Hermes' essential `hermes-agent` skill may also remain visible. This restriction is Telegram-specific and does not remove developer CLI skills.
 
 The Telegram surface must not include `terminal`, `file`, `browser`, `web`, `code_execution`, `delegation`, or `computer_use`. Re-run `hermes tools list --platform telegram` after Hermes upgrades or profile changes to detect configuration drift.
+
+### Hermes Cron Surface
+
+Configure `platform_toolsets.cron` to only `skills` plus the `faria-household-cron-readonly` MCP alias. Per routine job, set `enabled_toolsets` even more explicitly to `skills` and `mcp-faria-household-cron-readonly`. The `mcp-` prefix is Hermes' runtime toolset name for that configured server.
+
+Routine jobs use canonical five-field cron or offset-aware one-shot timestamps, attach `faria-home-ops`, and deliver to `origin`. Every persisted prompt is self-contained and contains only the routine UUID plus instructions to call `routine_get`, return `[SILENT]` unless state is `ACTIVE`, and avoid external/financial actions.
+
+Hermes-managed runtime state owns actual cron jobs, origin/thread delivery metadata, and job IDs. Never commit `~/.hermes/cron/jobs.json`, job IDs, Telegram IDs, credentials, or local executable paths. The dashboard derives next routine from SQLite and never reads this runtime state.
 
 ## 3. 9Router Configuration
 
@@ -87,11 +99,13 @@ FARIA owns only these architectural expectations:
 
 - only explicitly allowlisted Telegram identities may interact with FARIA;
 - Docker remains the Hermes terminal sandbox backend for developer CLI use; Telegram has no terminal toolset;
-- the Telegram model surface is restricted to skills plus the twelve allowlisted `faria-household` tools;
+- the Telegram model surface is restricted to Finance/Home Ops skills, cronjob management, and the eighteen allowlisted `faria-household` tools;
+- cron execution is restricted to skills plus read-only `routine_get`; finance writes and system tools are unavailable;
 - the owner is configured in both the explicit allowlist and local DM identity mapping; spouse onboarding/testing remains outstanding;
 - rejection of a non-allowlisted Telegram identity has not yet been tested.
 - stdio MCP calls do not currently carry trustworthy per-Telegram-user identity into Household MCP; Telegram allowlisting remains the external authentication boundary.
 - the dashboard is local-only and read-only; it adds no Telegram capability and no financial HTTP operation.
+- automatic scheduler reconciliation is not running; `PENDING_SCHEDULE` is inspected/retried through controlled conversation.
 
 Spouse onboarding and an actual rejection test from a non-allowlisted identity remain required before shared household use is considered accepted.
 

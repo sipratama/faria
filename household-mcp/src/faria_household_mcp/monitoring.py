@@ -11,7 +11,7 @@ from pydantic.alias_generators import to_camel
 from faria_household_mcp.database import HouseholdDatabase, utc_now
 
 
-Persona = Literal["FINANCE", "GIVING"]
+Persona = Literal["FINANCE", "GIVING", "HOME_OPS"]
 ActivityStatus = Literal["SUCCEEDED", "FAILED"]
 PersonaStatus = Literal["IDLE", "WORKING", "ERROR"]
 
@@ -120,7 +120,11 @@ class MonitoringService:
             rows = connection.execute(
                 """
                 SELECT * FROM agent_persona_state
-                ORDER BY CASE persona WHEN 'FINANCE' THEN 1 ELSE 2 END
+                ORDER BY CASE persona
+                    WHEN 'FINANCE' THEN 1
+                    WHEN 'GIVING' THEN 2
+                    ELSE 3
+                END
                 """
             ).fetchall()
         return tuple(

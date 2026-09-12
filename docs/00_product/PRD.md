@@ -126,7 +126,7 @@ Biaya operasional rumah tangga terdanai tanpa overhead pencatatan.
 P0
 
 **Related Feature Specs**
-- TBD.
+- `../01_features/household-routines.md`
 
 ### CAP-ALLOW-001 — Personal Allowances
 
@@ -184,11 +184,12 @@ P1
 **Related Feature Specs**
 - `../01_features/agent-control-center.md`
 
-**RF-05 implementation note**
+**RF-06 implementation note**
 The first local, read-only control center implements current Finance/Giving state,
 completed activity history, pending MonthlyAllocation drafts, and a small household
-snapshot. Home Ops and Planner remain visibly inactive. Scheduled/next-task state,
-Hermes/9Router live health, and AI usage/cost remain deferred until reliable sources exist.
+snapshot. RF-06 activates Home Ops and adds its active routine count and next SQLite-derived
+routine. Planner remains visibly inactive. Hermes/9Router live health and AI usage/cost remain
+deferred until reliable sources exist.
 
 ### CAP-APPROVE-001 — Human Confirmation Boundary
 
@@ -216,7 +217,8 @@ FARIA tetap menjadi household assistant, bukan chatbot umum.
 P0
 
 **Related Feature Specs**
-- TBD.
+- `../01_features/monthly-allocation.md`
+- `../01_features/household-routines.md`
 
 ---
 

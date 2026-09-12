@@ -102,6 +102,7 @@ export function DashboardClient({
   const allocation = data.householdSnapshot.monthlyAllocation;
   const savings = data.householdSnapshot.savings;
   const giving = data.householdSnapshot.giving;
+  const homeOps = data.householdSnapshot.homeOps;
 
   return (
     <main className="shell">
@@ -187,7 +188,13 @@ export function DashboardClient({
                 <li key={activity.activityId}>
                   <span className={`activity-dot ${activity.status.toLowerCase()}`} />
                   <div>
-                    <span>{activity.persona === "FINANCE" ? "Finance" : "Giving"}</span>
+                    <span>
+                      {activity.persona === "FINANCE"
+                        ? "Finance"
+                        : activity.persona === "GIVING"
+                          ? "Giving"
+                          : "Home Ops"}
+                    </span>
                     <strong>{activity.summary}</strong>
                   </div>
                   <time dateTime={activity.occurredAt}>{formatTimestamp(activity.occurredAt)}</time>
@@ -223,12 +230,21 @@ export function DashboardClient({
             <strong>{giving.currentPeriodCount} catatan</strong>
             <p>{giving.latestType ? `Terakhir: ${giving.latestType.replace("_", " ")}` : "Belum ada catatan giving."}</p>
           </article>
+          <article>
+            <span>Routine rumah</span>
+            <strong>{homeOps.activeRoutineCount} aktif</strong>
+            <p>
+              {homeOps.nextRoutine
+                ? `Berikutnya: ${homeOps.nextRoutine.title} · ${formatTimestamp(homeOps.nextRoutine.nextDueAt)}`
+                : "Belum ada routine aktif terjadwal."}
+            </p>
+          </article>
         </div>
       </section>
 
       <footer>
-        <span>FARIA / RF-05</span>
-        <span>Monitoring lokal · tanpa kontrol finansial</span>
+        <span>FARIA / RF-06</span>
+        <span>Monitoring lokal · kontrol routine tetap melalui Telegram</span>
       </footer>
     </main>
   );

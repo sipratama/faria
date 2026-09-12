@@ -24,6 +24,12 @@ from faria_household_mcp.financial_rules import (
 )
 from faria_household_mcp.giving import GivingError, GivingRecordView, GivingService, GivingType
 from faria_household_mcp.monitoring import MonitoringService, Persona
+from faria_household_mcp.routines import (
+    RoutineError,
+    RoutineScheduleKind,
+    RoutineService,
+    RoutineView,
+)
 from faria_household_mcp.savings import (
     SavingsContributionResult,
     SavingsError,
@@ -49,6 +55,12 @@ TOOL_NAMES = frozenset(
         "savings_contribution_record",
         "giving_list",
         "giving_record",
+        "routine_list",
+        "routine_get",
+        "routine_create",
+        "routine_scheduler_link",
+        "routine_complete",
+        "routine_cancel",
     }
 )
 
@@ -56,7 +68,7 @@ TOOL_NAMES = frozenset(
 def _call_domain(operation: Callable[..., _T], *args: object) -> _T:
     try:
         return operation(*args)
-    except (AllocationError, FinancialRulesError, SavingsError, GivingError) as error:
+    except (AllocationError, FinancialRulesError, SavingsError, GivingError, RoutineError) as error:
         raise ToolError(str(error)) from error
 
 
@@ -81,7 +93,7 @@ def _call_monitored(
     _best_effort(monitoring.mark_working, persona, task)
     try:
         result = operation(*args)
-    except (AllocationError, FinancialRulesError, SavingsError, GivingError) as error:
+    except (AllocationError, FinancialRulesError, SavingsError, GivingError, RoutineError) as error:
         _best_effort(
             monitoring.record_failure,
             persona,
@@ -119,6 +131,7 @@ def create_server(database_path: str | Path | None = None) -> MCPServer:
     rules_service = FinancialRulesService(database)
     savings_service = SavingsService(database)
     giving_service = GivingService(database)
+    routine_service = RoutineService(database)
     monitoring = MonitoringService(database)
     server = MCPServer(
         name="faria-household",
@@ -128,7 +141,9 @@ def create_server(database_path: str | Path | None = None) -> MCPServer:
             "Monthly allocations are plans, while savings contributions and giving records are "
             "actual history. The orchestration layer must establish explicit human confirmation "
             "before confirming an allocation, creating a savings goal, recording a savings "
-            "contribution, or recording giving."
+            "contribution, recording giving, creating a routine, or cancelling a routine. "
+            "Household routine state is authoritative in SQLite; scheduler jobs are delivery "
+            "machinery and must re-check routine_get before sending a reminder."
         ),
         version="0.1.0",
     )
@@ -288,6 +303,87 @@ def create_server(database_path: str | Path | None = None) -> MCPServer:
             period,
             monthly_allocation_reference,
             note,
+        )
+
+    @server.tool(name="routine_list", structured_output=True)
+    def routine_list(include_inactive: bool = False) -> tuple[RoutineView, ...]:
+        """List open routines by default, or include completed/cancelled history."""
+        return _call_domain(routine_service.list, include_inactive)
+
+    @server.tool(name="routine_get", structured_output=True)
+    def routine_get(routine_id: str) -> RoutineView:
+        """Get one authoritative household routine, including scheduler linkage and due time."""
+        return _call_domain(routine_service.get, routine_id)
+
+    @server.tool(name="routine_create", structured_output=True)
+    def routine_create(
+        title: str,
+        schedule_kind: RoutineScheduleKind,
+        schedule_expression: str,
+        timezone: str,
+        description: str | None = None,
+    ) -> RoutineView:
+        """Create PENDING_SCHEDULE state only after explicit human confirmation."""
+        return _call_monitored(
+            monitoring,
+            "HOME_OPS",
+            "Household routine creation",
+            "HOUSEHOLD_ROUTINE_CREATED",
+            lambda result: "Household routine created pending scheduling.",
+            lambda result: ("HOUSEHOLD_ROUTINE", result.routine_id),
+            routine_service.create,
+            title,
+            schedule_kind,
+            schedule_expression,
+            timezone,
+            description,
+        )
+
+    @server.tool(name="routine_scheduler_link", structured_output=True)
+    def routine_scheduler_link(routine_id: str, scheduler_job_id: str) -> RoutineView:
+        """Atomically bind a successfully created Hermes job and activate its routine."""
+        return _call_monitored(
+            monitoring,
+            "HOME_OPS",
+            "Household routine scheduler linking",
+            "HOUSEHOLD_ROUTINE_SCHEDULER_LINKED",
+            lambda result: "Household routine scheduler linked and activated.",
+            lambda result: ("HOUSEHOLD_ROUTINE", result.routine_id),
+            routine_service.link_scheduler,
+            routine_id,
+            scheduler_job_id,
+        )
+
+    @server.tool(name="routine_complete", structured_output=True)
+    def routine_complete(routine_id: str) -> RoutineView:
+        """Complete a one-off routine or only the current recurring occurrence."""
+        return _call_monitored(
+            monitoring,
+            "HOME_OPS",
+            "Household routine completion",
+            "HOUSEHOLD_ROUTINE_COMPLETED",
+            lambda result: (
+                "One-off household routine completed."
+                if result.status == "COMPLETED"
+                else "Recurring household routine occurrence completed."
+            ),
+            lambda result: ("HOUSEHOLD_ROUTINE", result.routine_id),
+            routine_service.complete,
+            routine_id,
+        )
+
+    @server.tool(name="routine_cancel", structured_output=True)
+    def routine_cancel(routine_id: str) -> RoutineView:
+        """Authoritatively cancel future reminder delivery without deleting history."""
+        return _call_monitored(
+            monitoring,
+            "HOME_OPS",
+            "Household routine cancellation",
+            "HOUSEHOLD_ROUTINE_CANCELLED",
+            lambda result: "Household routine cancelled.",
+            lambda result: ("HOUSEHOLD_ROUTINE", result.routine_id),
+            routine_service.cancel,
+            routine_id,
         )
 
     return server

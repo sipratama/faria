@@ -88,6 +88,12 @@ CORE_PROJECT_PLACEHOLDERS = [
 
 MARKDOWN_LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 FENCED_CODE_BLOCK_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
+IGNORED_MARKDOWN_DIRECTORIES = {
+    ".git",
+    ".next",
+    ".venv",
+    "node_modules",
+}
 
 
 def remove_fenced_code_blocks(text: str) -> str:
@@ -133,6 +139,8 @@ def check_structure() -> list[str]:
 def check_local_markdown_links() -> list[str]:
     errors = []
     for md in ROOT.rglob("*.md"):
+        if any(part in IGNORED_MARKDOWN_DIRECTORIES for part in md.relative_to(ROOT).parts):
+            continue
         text = remove_fenced_code_blocks(md.read_text(encoding="utf-8"))
         for raw in MARKDOWN_LINK_RE.findall(text):
             target = raw.strip().split()[0].strip("<>")

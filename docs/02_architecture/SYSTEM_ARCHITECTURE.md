@@ -12,7 +12,7 @@
 |---|---|
 | Project | FARIA |
 | Status | Draft |
-| Version | `0.7` |
+| Version | `0.8` |
 | Architecture Owner | sipratama |
 | Last Updated | `2026-09-12` |
 
@@ -159,12 +159,12 @@ Docker isolates Hermes terminal/tool execution and runs 9Router; it does not hos
 
 | Component | Responsibility | Technology | Current / Planned Execution Unit |
 |---|---|---|---|
-| Household MCP (through RF-04 implemented locally) | Twelve constrained allocation/rules/savings/giving tools over stdio | Python 3.11, official MCP SDK, stdlib SQLite | Hermes-managed local stdio process; production unit TBD |
-| Dashboard API (RF-05 implemented locally) | Purpose-built read-only household/monitoring queries | FastAPI / Uvicorn | macOS process bound to `127.0.0.1:8000` |
-| Dashboard (RF-05 implemented locally) | Read-only Agent Control Center web UI | React / Next.js | Node process bound to loopback; production unit TBD |
+| Household MCP (through RF-06 implemented locally) | Eighteen constrained finance and routine tools over stdio | Python 3.11, official MCP SDK, stdlib SQLite, croniter | Hermes-managed local stdio process; production unit TBD |
+| Dashboard API (through RF-06 implemented locally) | Purpose-built read-only household/monitoring/routine projection | FastAPI / Uvicorn | macOS process bound to `127.0.0.1:8000` |
+| Dashboard (through RF-06 implemented locally) | Read-only Agent Control Center with Home Ops visibility | React / Next.js | Node process bound to loopback; production unit TBD |
 | SQLite | Authoritative structured data | SQLite file | Host/volume and backup mechanism TBD before production use |
 
-The logical relationships among Hermes, Household MCP, SQLite, and the dashboard remain as documented throughout this architecture. RF-05 adds the local `Browser -> Next.js -> Dashboard API -> query layer -> SQLite` read path without choosing production packaging.
+The logical relationships among Hermes, Household MCP, SQLite, and the dashboard remain as documented throughout this architecture. RF-06 activates the existing Hermes Cron boundary without adding a scheduler service: routine intent stays in SQLite while cron jobs remain runtime scheduling/delivery records.
 
 ---
 
@@ -199,7 +199,7 @@ RF-05 uses React component state only for polling/error UX and introduces no cli
 |---|---|---:|---|
 | Finance Agent (repo skill: `agent/skills/faria-finance/`) | Monthly allocation, financial rules, savings goals/contributions, zakat, sedekah | No | Household MCP |
 | Giving Agent (logical persona; currently covered by Finance skill) | Zakat penghasilan, sedekah | No | Household MCP |
-| Home Ops Agent (skill) | Routines, maintenance, reminders | No | Household MCP |
+| Home Ops Agent (repo skill: `agent/skills/faria-home-ops/`) | Routines, maintenance, reminders | No | Household MCP plus Hermes Cron adapter |
 | Planner Agent (skill) | Cross-cutting scheduling/summary | No | Household MCP, other skills |
 | Household MCP | All of the above domain state | Yes | SQLite |
 | Dashboard query/API layer | No authoritative state; read projection only | No | Household MCP-owned query/database layer |
@@ -259,6 +259,8 @@ Household MCP applies ordered, explicit SQL migrations and records each version 
 
 A confirmed allocation and its line items must be persisted atomically; a draft never partially becomes authoritative.
 
+Routine creation uses a small orchestration saga: Household MCP persists `PENDING_SCHEDULE`, Hermes creates the job, then `routine_scheduler_link` atomically records the runtime reference and activates the routine. Failure to create/link a job never produces a false `ACTIVE` claim.
+
 ### Data Retention
 
 Indefinite while the household uses FARIA (see PRD, Data and Privacy Expectations).
@@ -283,7 +285,7 @@ Household MCP tools remain the constrained mutation interface for Hermes. RF-05 
 
 ### Contract Source
 
-RF-04 exposes exactly twelve tools: four `monthly_allocation_*` tools plus `financial_rules_get`, `zakat_calculate`, `savings_goal_list`, `savings_goal_create`, `savings_goal_get`, `savings_contribution_record`, `giving_list`, and `giving_record`. The three finance feature specifications own their behavior.
+RF-06 exposes exactly eighteen tools: the twelve existing finance tools plus `routine_list`, `routine_get`, `routine_create`, `routine_scheduler_link`, `routine_complete`, and `routine_cancel`. Finance and routine feature specifications own their behavior.
 
 RF-05 exposes exactly three dashboard API operations:
 
@@ -299,6 +301,8 @@ There are no POST, PUT, PATCH, or DELETE dashboard routes.
 - every state-changing tool call is scoped to one domain operation;
 - draft writes may persist non-authoritative working state;
 - material financial changes require an explicit prior human confirmation step before allocation confirmation, savings-goal creation, contribution recording, or giving recording;
+- routine creation and cancellation require explicit object-specific confirmation before Household MCP mutation;
+- completion is allowed from clear unique intent and recurring completion preserves `ACTIVE`;
 - MonthlyAllocation is PLAN only; its confirmation has no automatic SavingsContribution/GivingRecord side effect.
 
 ### Error Model
@@ -309,7 +313,7 @@ Household MCP distinguishes validation, not-found, invalid-state, and conflict f
 
 ## 10. Event and Async Architecture
 
-Not applicable for V1 — no message broker or asynchronous event contract exists. Hermes Cron handles scheduled/recurring work deterministically without requiring an event bus.
+No message broker or asynchronous event contract exists. Hermes Cron handles scheduled execution and Telegram delivery. SQLite remains authoritative: every cron prompt loads the Home Ops skill and calls the read-only routine alias to verify `ACTIVE`; `PENDING_SCHEDULE`, `COMPLETED`, or `CANCELLED` returns `[SILENT]`. Missing jobs are reconciliation issues, not routine deletion.
 
 ---
 
@@ -325,7 +329,7 @@ Ownership-based — both allowlisted household members have full access to the s
 
 ### Enforcement Boundary
 
-The allowlist check happens before Hermes processes a Telegram message. Household MCP additionally scopes every call to twelve allowed domain operations and enforces validation/state invariants. The current stdio MCP transport does not provide trustworthy per-Telegram-user identity to Household MCP, so an actor/reference supplied to a tool is audit-only and is not an authentication boundary.
+The allowlist check happens before Hermes processes a Telegram message. Household MCP additionally scopes every call to eighteen allowed domain operations and enforces validation/state invariants. The current stdio MCP transport does not provide trustworthy per-Telegram-user identity to Household MCP, so an actor/reference supplied to a tool is audit-only and is not an authentication boundary.
 
 ### Identity Flow
 
@@ -373,7 +377,8 @@ SQLite / Backup
 - only allowlisted Telegram identities are processed;
 - household display aliases are personalization only: current-speaker context is injected from a local Telegram DM mapping after authorization, and message text, Telegram display names, or usernames cannot override it;
 - the LLM never receives raw SQL access to authoritative household state; authoritative reads/writes use only Household MCP's constrained tools;
-- the household Telegram surface exposes only the repo-owned Finance skill (plus Hermes' non-disableable operating skill) and the twelve allowlisted `faria-household` MCP tools; terminal, file, browser, web, code execution, delegation, and computer-use toolsets remain unavailable there, while the developer CLI is configured separately;
+- the household Telegram surface exposes the repo-owned Finance/Home Ops skills, the eighteen allowlisted `faria-household` MCP tools, and Hermes `cronjob`; terminal, file, browser, web, code execution, delegation, and computer-use toolsets remain unavailable there, while the developer CLI is configured separately;
+- cron execution is restricted to skills plus the `mcp-faria-household-cron-readonly` alias exposing only `routine_get`; it receives no finance mutation or system tool surface;
 - material financial state changes require explicit human confirmation before becoming authoritative; Household MCP constrains state transitions while Hermes/orchestration remains responsible for interpreting confirmation before calling confirm/create/record tools;
 - 9Router and Household MCP are not publicly exposed beyond what Hermes/dashboard need;
 - privileged/state-changing Household MCP calls should be auditable (who/when/what).
@@ -490,6 +495,10 @@ Browser and Next.js code never access SQLite directly; dashboard data crosses th
 
 The Dashboard API binds to loopback and exposes only the three documented GET operations. Remote authentication and public deployment remain deferred.
 
+### INV-07 — Routine state outranks scheduler state
+
+SQLite/Household MCP owns HouseholdRoutine lifecycle. Hermes Cron owns only scheduling and delivery; every execution must re-read the routine and remain silent unless it is `ACTIVE`.
+
 ---
 
 ## 20. Architecture Decision Records
@@ -571,6 +580,7 @@ Do not update this document for routine internal refactoring that preserves the 
 | Version | Date | Change | Author |
 |---|---|---|---|
 | 0.7 | `2026-09-12` | Added the RF-05 local read-only Dashboard API, Next.js boundary, monitoring ownership, and invariants | sipratama |
+| 0.8 | `2026-09-12` | Activated RF-06 Home Ops routines, Hermes Cron adapter safety, and dashboard routine projection | sipratama |
 | 0.6 | `2026-09-12` | Added RF-04 financial rules, savings/giving persistence, twelve-tool boundary, and PLAN-versus-ACTUAL semantics | sipratama |
 | 0.5 | `2026-09-12` | Added local Telegram DM member-context mapping and separated display identity from authorization | sipratama |
 | 0.4 | `2026-09-12` | Added the repo-owned FARIA identity/Finance skill and restricted Telegram tool/skill surface from RF-03 | sipratama |
