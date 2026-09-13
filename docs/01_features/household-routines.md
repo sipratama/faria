@@ -16,14 +16,14 @@ RF-06 supports one-off reminders, five-field recurring schedules, listing/detail
 - FARIA loads `agent/skills/faria-home-ops/SKILL.md` for routine/reminder intents.
 - Conversational time is normalized to a canonical schedule before Household MCP is called.
 - Household timezone is `Asia/Jakarta`.
-- Creation and cancellation require explicit, object-specific confirmation.
+- A direct, unambiguous creation command with a precise schedule is sufficient creation intent; cancellation requires explicit, object-specific confirmation.
 
 ## 3. Functional Requirements
 
 ### FR-ROUTINE-001 — Create One-Off Routine
 
 **Requirement**
-After a precise future date/time and explicit confirmation, FARIA creates a `ONE_OFF` routine using an offset-aware ISO timestamp for the intended Jakarta time.
+From a direct creation command with a precise future date/time, FARIA creates a `ONE_OFF` routine using an offset-aware ISO timestamp for the intended Jakarta time without requiring a second confirmation turn.
 
 **Acceptance Criteria**
 - Household MCP receives no vague natural-language schedule.
@@ -33,21 +33,24 @@ After a precise future date/time and explicit confirmation, FARIA creates a `ONE
 ### FR-ROUTINE-002 — Create Recurring Routine
 
 **Requirement**
-After a precise recurrence and explicit confirmation, FARIA creates a `RECURRING` routine using a deterministic five-field cron expression.
+From a direct creation command with a precise recurrence, FARIA creates a `RECURRING` routine using a deterministic five-field cron expression without requiring a second confirmation turn.
 
 **Acceptance Criteria**
 - Invalid, extended, or ambiguous schedules are rejected or clarified before persistence.
 - A recurring schedule has a calculable next occurrence in `Asia/Jakarta`.
 - Missing time is never silently replaced with a default.
 
-### FR-ROUTINE-003 — Explicit Creation Confirmation
+### FR-ROUTINE-003 — Direct Creation Intent and Acknowledgement Safety
 
 **Requirement**
-FARIA displays the normalized title, schedule, local time, and timezone before creation and requires explicit confirmation naming the creation action or object.
+A direct, unambiguous reminder/routine creation command is sufficient intent when the title/purpose, schedule, and timezone are safely resolved. FARIA asks clarification instead of inventing missing schedule values. Generic acknowledgements are not standalone creation commands and cannot replay a completed creation saga.
 
 **Acceptance Criteria**
-- `oke`, `sip`, `mantap`, `lanjut`, emoji, silence, or generic affirmation does not create a routine.
-- Explicit wording such as `Konfirmasi buat routine ini` may proceed.
+- `Ingatkan saya 3 menit lagi untuk cek galon` may proceed directly through creation, cron creation, scheduler linking, and `ACTIVE`.
+- `Ingatkan service AC setiap 3 bulan tanggal 1 jam 09:00` may proceed directly as a recurring routine.
+- Vague or incomplete schedules require clarification before any routine or cron mutation.
+- `oke`, `sip`, `mantap`, `lanjut`, emoji, silence, or generic affirmation alone does not create a routine.
+- A generic acknowledgement after successful creation does not repeat `routine_create`, cron creation, or `routine_scheduler_link`.
 - Existing financial confirmation behavior is unchanged.
 
 ### FR-ROUTINE-004 — List / Retrieve Routines
@@ -129,7 +132,7 @@ Conversational interpretation, cron scheduling, displayed times, and derived rec
 |---|---|
 | BR-ROUTINE-01 | SQLite/Household MCP owns routine state; Hermes Cron owns scheduling and delivery. |
 | BR-ROUTINE-02 | Routine UUID is stable; `scheduler_job_id` is operational metadata only. |
-| BR-ROUTINE-03 | Creation and cancellation require conservative explicit confirmation. |
+| BR-ROUTINE-03 | Direct, unambiguous creation intent may proceed without a second confirmation turn; cancellation remains explicitly confirmed. |
 | BR-ROUTINE-04 | Completion affects one occurrence; recurring completion does not terminate recurrence. |
 | BR-ROUTINE-05 | Cancellation is authoritative even when scheduler cleanup fails. |
 | BR-ROUTINE-06 | Cron prompts contain no credentials, Telegram IDs, financial data, or private paths. |
@@ -149,8 +152,9 @@ There is no hard delete tool. `SNOOZE` is deferred after RF-06.
 
 | State | Required Behavior |
 |---|---|
-| Ambiguous time | Ask for the exact date/time; do not persist. |
-| Ambiguous confirmation | Restate the object/action; do not create/cancel. |
+| Ambiguous or incomplete schedule | Ask for the exact date/time/recurrence; do not persist or create cron state. |
+| Generic acknowledgement | Acknowledge harmlessly; do not create, replay, duplicate, or cancel a routine. |
+| Ambiguous cancellation confirmation | Restate the identified object/action; do not cancel. |
 | Cron creation failure | Keep `PENDING_SCHEDULE`; report scheduling failure. |
 | Scheduler link failure | Best-effort remove the new job; keep routine recoverable. |
 | Cron removal failure after cancellation | Keep `CANCELLED`; stale run returns `[SILENT]`. |
@@ -162,7 +166,7 @@ There is no hard delete tool. `SNOOZE` is deferred after RF-06.
 - Migration `001 → 002 → 003 → 004` with existing finance/monitoring data preserved.
 - Input validation, five-field cron validation, Jakarta timezone, and fixed-clock due calculation.
 - One-off and recurring lifecycle, idempotent scheduler link, conflicting link rejection, cancellation, and no hard deletion.
-- Skill evidence for explicit versus ambiguous confirmation and general-automation refusal.
+- Skill evidence for direct one-off/recurring creation, schedule clarification, acknowledgement replay safety, explicit cancellation, completion, finance isolation, and general-automation refusal.
 - Dashboard active/empty/cancelled states with Home Ops active and Planner inactive.
 
 ## 8. Deferred
@@ -178,4 +182,5 @@ There is no hard delete tool. `SNOOZE` is deferred after RF-06.
 
 | Version | Date | Change | Author |
 |---|---|---|---|
+| 1.1 | `2026-09-13` | Aligned direct creation intent, acknowledgement replay safety, and stricter cancellation policy in RF-06B | sipratama |
 | 1.0 | `2026-09-12` | Added RF-06 authoritative routine/reminder behavior | sipratama |

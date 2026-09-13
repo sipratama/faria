@@ -301,7 +301,7 @@ There are no POST, PUT, PATCH, or DELETE dashboard routes.
 - every state-changing tool call is scoped to one domain operation;
 - draft writes may persist non-authoritative working state;
 - material financial changes require an explicit prior human confirmation step before allocation confirmation, savings-goal creation, contribution recording, or giving recording;
-- routine creation and cancellation require explicit object-specific confirmation before Household MCP mutation;
+- routine creation may proceed from direct unambiguous creation intent with a safely resolved schedule, while cancellation still requires explicit object-specific confirmation before Household MCP mutation;
 - completion is allowed from clear unique intent and recurring completion preserves `ACTIVE`;
 - MonthlyAllocation is PLAN only; its confirmation has no automatic SavingsContribution/GivingRecord side effect.
 
@@ -579,6 +579,7 @@ Do not update this document for routine internal refactoring that preserves the 
 
 | Version | Date | Change | Author |
 |---|---|---|---|
+| 0.9 | `2026-09-13` | Aligned RF-06 routine creation intent and cancellation confirmation wording for RF-06B | sipratama |
 | 0.7 | `2026-09-12` | Added the RF-05 local read-only Dashboard API, Next.js boundary, monitoring ownership, and invariants | sipratama |
 | 0.8 | `2026-09-12` | Activated RF-06 Home Ops routines, Hermes Cron adapter safety, and dashboard routine projection | sipratama |
 | 0.6 | `2026-09-12` | Added RF-04 financial rules, savings/giving persistence, twelve-tool boundary, and PLAN-versus-ACTUAL semantics | sipratama |

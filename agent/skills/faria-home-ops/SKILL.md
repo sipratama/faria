@@ -1,6 +1,6 @@
 ---
 name: faria-home-ops
-description: Handle FARIA household routines and Telegram reminders with explicit creation and cancellation confirmation.
+description: Handle direct household routine creation, clarification, completion, and explicitly confirmed cancellation.
 version: 0.1.0
 author: sipratama, Hermes Agent
 license: MIT
@@ -49,23 +49,30 @@ Alias read-only tersebut hanya boleh mengekspos `routine_get`. Jika alias/tool t
 - `RECURRING` memakai tepat lima field cron, misalnya `0 19 * * *`, `0 9 20 * * *`, atau `0 10 1 */3 *`.
 - Natural-language time resolution dilakukan di percakapan sebelum tool MCP dipanggil.
 - Jangan mengarang tanggal atau jam. Tanyakan bila waktu belum presisi, termasuk `nanti sore`, `awal bulan`, `beberapa minggu lagi`, atau tanggal berulang tanpa jam.
-- Tampilkan waktu dalam WIB dan sebutkan `Asia/Jakarta` pada proposal.
+- Tampilkan waktu dalam WIB dan sebutkan `Asia/Jakarta` pada hasil normalisasi atau pertanyaan klarifikasi.
 
-## Konfirmasi Eksplisit
+## Intent Creation dan Konfirmasi Cancellation
 
-Creation dan cancellation menghasilkan proactive future behavior sehingga wajib mendapat konfirmasi yang jelas dan spesifik.
+Perintah creation yang langsung dan tidak ambigu sudah merupakan intent creation yang cukup. Bila action reminder/routine, title/purpose, schedule, dan timezone sudah jelas, lanjutkan saga creation tanpa meminta turn konfirmasi tambahan.
 
-Creation yang valid misalnya:
+Creation langsung yang valid misalnya:
 
-- `Konfirmasi buat routine ini`;
-- `Ya, buat reminder beli galon tersebut`.
+- `Ingatkan saya 3 menit lagi untuk cek galon.`;
+- `Ingatkan bayar internet tanggal 20 jam 19:00.`;
+- `Ingatkan service AC setiap 3 bulan tanggal 1 jam 09:00.`
+
+Jika waktu, tanggal, recurrence, atau interpretasi belum presisi, tanyakan klarifikasi dan jangan memanggil tool mutation. Contoh yang harus diklarifikasi: `Ingatkan nanti sore`, `Service AC beberapa bulan lagi`, atau `Ingatkan bayar internet tanggal 20` ketika jam dibutuhkan tetapi belum ada.
+
+`oke`, `sip`, `mantap`, `lanjut`, `yaudah`, emoji, diam, atau afirmasi umum bukan perintah creation mandiri dan tidak boleh membuat routine baru. Setelah creation sebelumnya sudah sukses, balas acknowledgement tersebut secara harmless; tidak boleh memanggil ulang `routine_create`, membuat cron job baru, atau memanggil ulang `routine_scheduler_link`.
+
+Cancellation tetap wajib mendapat konfirmasi yang jelas dan spesifik setelah routine teridentifikasi dan konsekuensi penghentian reminder ditampilkan.
 
 Cancellation yang valid misalnya:
 
 - `Konfirmasi pembatalan routine Service AC`;
 - `Ya, batalkan reminder filter air tersebut`.
 
-`oke`, `sip`, `mantap`, `lanjut`, `yaudah`, emoji, diam, atau afirmasi umum tidak cukup untuk membuat atau membatalkan routine. Tanyakan kembali objek dan aksi yang perlu dikonfirmasi. Existing finance confirmation policy tidak berubah.
+`oke`, `sip`, `ya`, atau afirmasi umum lain tidak cukup untuk membatalkan routine dan tidak boleh memanggil `routine_cancel`. Tanyakan kembali objek dan aksi cancellation yang perlu dikonfirmasi. Existing finance confirmation policy tidak berubah.
 
 Pernyataan completion yang jelas seperti `Service AC sudah selesai` boleh langsung diproses tanpa turn konfirmasi tambahan bila tepat satu routine cocok. Bila beberapa routine mungkin cocok, tanyakan pilihan.
 
@@ -82,14 +89,16 @@ Jika lebih dari satu kandidat masuk akal, tanyakan routine yang dimaksud. Jangan
 ## Saga Creation
 
 1. Normalisasi title, description opsional, schedule kind, canonical schedule, waktu WIB, dan timezone.
-2. Tampilkan proposal lengkap dan minta konfirmasi creation eksplisit.
-3. Setelah konfirmasi, panggil `routine_create`. State harus `PENDING_SCHEDULE`; jangan menyatakan active.
+2. Jika ada field atau interpretasi yang ambigu, minta klarifikasi dan berhenti tanpa mutation.
+3. Jika perintah creation langsung sudah jelas dan presisi, panggil `routine_create` tanpa turn konfirmasi tambahan. State harus `PENDING_SCHEDULE`; jangan menyatakan active.
 4. Buat Hermes cron job dengan canonical schedule, `deliver="origin"`, skill `faria-home-ops`, dan `enabled_toolsets=["skills", "mcp-faria-household-cron-readonly"]`.
 5. Prompt cron harus self-contained sesuai bagian berikut.
 6. Jika cron creation gagal, biarkan routine `PENDING_SCHEDULE`, laporkan scheduling failure, dan jangan mengklaim reminder active.
 7. Jika cron creation berhasil, panggil `routine_scheduler_link` dengan routine UUID dan returned cron job ID.
 8. Hanya setelah link mengembalikan `ACTIVE`, laporkan routine berhasil aktif.
 9. Jika scheduler link gagal, best-effort `cronjob(action="remove", job_id=...)`; jangan mengklaim sukses. Routine tetap `PENDING_SCHEDULE` dan dapat direkonsiliasi lewat percakapan berikutnya.
+
+Setelah saga berhasil dan `ACTIVE` sudah dilaporkan, anggap intent creation selesai. Replay pesan acknowledgement generik pada turn berikutnya tidak memiliki mutation intent dan tidak boleh menduplikasi routine atau cron job.
 
 Jangan menyimpan Telegram numeric ID, API key, filesystem path, atau cron prompt body di HouseholdRoutine.
 
