@@ -1,6 +1,6 @@
 # Developer Setup — FARIA
 
-> **Scope:** Accepted macOS development path through RF-05: runtime connectivity, Household MCP, repo-owned FARIA identity/Finance skill, Telegram finance workflows, local household-member identity mapping, and the read-only Agent Control Center.
+> **Scope:** Accepted macOS personal runtime path through RF-07A: connectivity, Household MCP, Telegram finance/Home Ops workflows, local member identity, the read-only Agent Control Center, encrypted backups, restore verification, and runtime diagnostics.
 
 ## 1. Prerequisites
 
@@ -9,9 +9,18 @@
 - the official Hermes managed installer;
 - Python 3.11+ and `uv` for Household MCP;
 - Node.js 22+ and npm for the Next.js dashboard;
+- `age` and `age-keygen` for encrypted backup and restore drills;
 - a Telegram BotFather token and explicit household-user allowlist for gateway setup.
 
 Keep all API credentials, bot tokens, and Telegram user IDs outside this repository.
+
+Install `age` through an operator-controlled package source. On the accepted macOS/Homebrew environment:
+
+```bash
+brew install age
+```
+
+Keep the generated private identity outside this repository. FARIA backup only needs the public recipient; restore verification needs the private identity path.
 
 ## 2. Install Hermes
 
@@ -293,9 +302,33 @@ hermes cron status
 
 Delete the temporary database only after every synthetic job is removed. Restart the gateway with the installed supported command, then confirm a synthetic recurring job remains listed before final cleanup. Never use the household's real database for acceptance and never commit cron job IDs, Telegram IDs, `jobs.json`, or runtime SQLite files.
 
-## 14. Related Documents
+## 14. Verify Personal Operations
+
+Run the non-mutating health check from the repository root:
+
+```bash
+scripts/runtime/check-runtime.sh
+```
+
+Resolve every `FAIL` before relying on the personal runtime. `WARN` is reserved for optional services or missing operational prerequisites such as an unset external backup directory or a stopped local dashboard.
+
+Before the first real backup:
+
+1. create/store an operator-owned `age` recovery identity outside the repository;
+2. record its public recipient separately;
+3. create an existing restrictive external directory;
+4. take a backup with `scripts/operations/backup_faria.py`;
+5. verify it with `scripts/operations/verify_restore.py`;
+6. retain recovery-key access independently from the machine holding the live database.
+
+Do not schedule infrastructure backup through FARIA Telegram cron. RF-07A validates manual operation first; RF-07B may add host-level scheduling after deployment decisions are made.
+
+See `docs/05_operations/RUNBOOK.md` for backup commands, recovery, upgrade checks, logs, and RF-07B readiness decisions.
+
+## 15. Related Documents
 
 - `docs/05_operations/CONFIGURATION.md`
+- `docs/05_operations/RUNBOOK.md`
 - `scripts/runtime/README.md`
 - `docs/02_architecture/SYSTEM_ARCHITECTURE.md`
 - `AGENTS.md`

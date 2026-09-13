@@ -4,7 +4,7 @@ FARIA (FArah RIzkia Ananda) is a private, single-household **AI Household Operat
 
 ## Status
 
-Personal MVP through RF-06: runtime connectivity, household finance foundations, household routines/reminders, agent monitoring, and the local read-only Agent Control Center are implemented. Household MCP remains the sole mutation authority over SQLite; Hermes Cron is only the reminder scheduling/delivery engine. A separate loopback-only FastAPI process provides three purpose-built GET endpoints to the Next.js dashboard. Telegram remains the primary interaction and mutation interface.
+Personal MVP through RF-06 is implemented. RF-07A adds provider-neutral personal operations hardening: consistent SQLite snapshots, mandatory `age` encryption, restore verification, bounded retention, non-mutating runtime diagnostics, and a concise recovery runbook. Household MCP remains the sole mutation authority over SQLite; Hermes Cron is only the reminder scheduling/delivery engine. A separate loopback-only FastAPI process provides three purpose-built GET endpoints to the Next.js dashboard. Telegram remains the primary interaction and mutation interface.
 
 ## What FARIA Does (V1)
 
@@ -40,7 +40,7 @@ One Hermes agent runtime orchestrates four logical personas (Finance, Giving, Ho
 | `AGENTS.md` | Rules for AI coding agents working in this repo |
 | `docs/standards/` | Reusable engineering standards |
 
-Several conditional documents (roadmap, NFR, UX flows, design system, test strategy, threat model, deployment, runbook, risks, release checklist, known limitations) are present but marked "Not activated for V1" — each will be filled in once its own stated activation condition is met. Developer Setup and Configuration were activated once a real runtime (RF-01) existed to describe.
+Several conditional documents remain marked "Not activated for V1" until their own activation conditions are met. Developer Setup and Configuration were activated in RF-01; the operations runbook is activated in RF-07A. Provider-specific deployment documentation remains deferred until RF-07B selects a host.
 
 ## Technology Direction (V1)
 
@@ -48,4 +48,4 @@ Hermes (agent runtime) · 9Router (model gateway) · OpenRouter (model provider)
 
 ## Setup
 
-RF-01 established Telegram → Hermes Gateway → 9Router → model. RF-02 added Hermes → Household MCP → SQLite, RF-03 added the repo-owned identity and Finance skill, RF-04 expanded the constrained finance surface, RF-05 added monitoring plus the local read-only dashboard, and RF-06 adds authoritative routines with Hermes Cron delivery plus Home Ops visibility. See `docs/05_operations/DEVELOPER_SETUP.md` for activation and testing.
+RF-01 established Telegram → Hermes Gateway → 9Router → model. RF-02 added Hermes → Household MCP → SQLite, RF-03 added the repo-owned identity and Finance skill, RF-04 expanded the constrained finance surface, RF-05 added monitoring plus the local read-only dashboard, and RF-06 added authoritative routines with Hermes Cron delivery plus Home Ops visibility. RF-07A adds backup, restore verification, runtime diagnostics, and recovery procedures without selecting or provisioning a remote host. See `docs/05_operations/DEVELOPER_SETUP.md` and `docs/05_operations/RUNBOOK.md`.

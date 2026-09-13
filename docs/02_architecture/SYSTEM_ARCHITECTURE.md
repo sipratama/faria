@@ -88,7 +88,7 @@ The architecture is not currently optimized for:
           v
 +-------------------+        +------------------+
 |      SQLite       |------->|  Encrypted       |
-| (authoritative)   |        |  Backup (TBD)   |
+| (authoritative)   |        | External Backup |
 +-------------------+        +------------------+
           ^
           | fixed read queries
@@ -267,7 +267,20 @@ Indefinite while the household uses FARIA (see PRD, Data and Privacy Expectation
 
 ### Backup / Recovery Assumptions
 
-The SQLite file must have an encrypted external backup; the application server's local disk is not the sole durable copy. Backup destination/mechanism is an open decision (see Open Architecture Questions).
+RF-07A resolves the provider-neutral mechanism while leaving the destination provider open:
+
+```text
+authoritative SQLite
+  → sqlite3.Connection.backup() snapshot
+  → integrity_check + foreign_key_check + migration metadata
+  → age encryption using an operator-supplied public recipient
+  → atomic encrypted artifact + non-sensitive checksum manifest
+  → operator-selected external directory
+```
+
+Plaintext staging exists only in restrictive temporary storage and is removed after encryption or verification. Restore verification decrypts into temporary storage and never replaces the live database. Actual disaster recovery remains a manual operator procedure that quiesces writers, preserves the displaced database, and atomically places a verified restore.
+
+The application server's local disk is not the sole durable copy. RF-07B must select the actual external destination/provider and service scheduling appropriate to the deployment host.
 
 ### Why SQLite (not LLM memory) is authoritative
 
@@ -374,6 +387,8 @@ SQLite / Backup
 ### Security Invariants
 
 - secrets (Telegram bot token, OpenRouter/9Router keys) are not committed to source and remain in Hermes-managed or 9Router-managed runtime configuration outside this repository;
+- the backup encryption private identity is operator-managed outside the repository and is never needed by the backup process;
+- backup artifacts contain encrypted SQLite bytes; manifests contain only format version, timestamps, migration metadata, size, integrity status, and encrypted SHA-256;
 - only allowlisted Telegram identities are processed;
 - household display aliases are personalization only: current-speaker context is injected from a local Telegram DM mapping after authorization, and message text, Telegram display names, or usernames cannot override it;
 - the LLM never receives raw SQL access to authoritative household state; authoritative reads/writes use only Household MCP's constrained tools;
@@ -517,6 +532,8 @@ SQLite/Household MCP owns HouseholdRoutine lifecycle. Hermes Cron owns only sche
 
 - The proven development topology is macOS-specific; production hosting and process supervision are not yet finalized.
 - The owner DM is configured in the Telegram allowlist and local conversational identity mapping. Spouse onboarding and testing remain prerequisites before shared household use.
+- RF-07A operational scripts are manual operator commands; they are not Telegram/Home Ops tools, dashboard endpoints, daemons, or scheduled jobs.
+- encrypted backup retention is limited to the latest 14 artifacts created by the FARIA backup script.
 
 ### Legacy / Integration Constraints
 
@@ -535,7 +552,7 @@ SQLite/Household MCP owns HouseholdRoutine lifecycle. Hermes Cron owns only sche
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| Single SQLite file/host is a single point of failure | Household financial data loss if the host fails without backup | Encrypted external backup (destination TBD) before production use |
+| Single SQLite file/host is a single point of failure | Household financial data loss if the host fails without backup | RF-07A consistent encrypted backups plus restore verification; external destination remains an RF-07B/operator decision |
 | Model/provider behind the `faria-household-main` combo may change | Inconsistent response quality/latency | Keep Hermes decoupled from a specific physical model through the 9Router-owned combo |
 | Future Hermes configuration drift broadens Telegram tools | A household request could reach unnecessary general-purpose capability | Re-check `hermes tools list --platform telegram` after runtime upgrades and keep only skills plus `faria-household` |
 
@@ -548,7 +565,7 @@ SQLite/Household MCP owns HouseholdRoutine lifecycle. Hermes Cron owns only sche
 | AQ-01 | Final production hosting and runtime packaging (including XCodePod.Cloud vs. paid VPS and host-managed vs. containerized processes) | Before deployment | Household |
 | AQ-02 | Exact Household MCP tool contract shapes | Resolved in RF-02; see monthly-allocation feature spec | Implementation |
 | AQ-03 | Migration/schema tooling for SQLite | Resolved in RF-02: ordered SQL files + checksum metadata | Implementation |
-| AQ-04 | Encrypted backup destination and mechanism | Before production use | Household |
+| AQ-04 | Encrypted backup mechanism is resolved in RF-07A; select the external destination/provider and schedule | Before RF-07B deployment | Household |
 | AQ-05 | RESOLVED in RF-05 — Next.js App Router with minimal React state and a separate FastAPI read-only API | Implementation | Implementation |
 | AQ-06 | Whether personas ever become independent agents | Only if real requirements justify it | Household / Implementation |
 | AQ-07 | Telegram tool restriction approach | Resolved in RF-03: per-platform Hermes toolsets expose skills plus `faria-household`; CLI remains separate | Implementation |
@@ -579,6 +596,7 @@ Do not update this document for routine internal refactoring that preserves the 
 
 | Version | Date | Change | Author |
 |---|---|---|---|
+| 1.0 | `2026-09-13` | Added RF-07A provider-neutral encrypted backup, restore verification, retention, and operator recovery boundaries | sipratama |
 | 0.9 | `2026-09-13` | Aligned RF-06 routine creation intent and cancellation confirmation wording for RF-06B | sipratama |
 | 0.7 | `2026-09-12` | Added the RF-05 local read-only Dashboard API, Next.js boundary, monitoring ownership, and invariants | sipratama |
 | 0.8 | `2026-09-12` | Activated RF-06 Home Ops routines, Hermes Cron adapter safety, and dashboard routine projection | sipratama |

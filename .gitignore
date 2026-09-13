@@ -87,3 +87,5 @@ __pycache__/
 *.db-shm
 *.sqlite
 *.sqlite3
+faria-*.sqlite.age
+faria-*.sqlite.age.json

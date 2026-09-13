@@ -480,3 +480,20 @@ PROJECT_SPECIFIC_DOCS
 Jangan menambahkan file ke required list hanya karena file tersebut tersedia.
 
 File seharusnya menjadi required hanya jika kehilangan file tersebut membuat **repository template** tidak lagi lengkap atau konsisten.
+
+---
+
+# FARIA Operational Scripts
+
+RF-07A adds two manual, provider-neutral commands:
+
+```bash
+household-mcp/.venv/bin/python scripts/operations/backup_faria.py
+household-mcp/.venv/bin/python scripts/operations/verify_restore.py <encrypted-backup>
+```
+
+`backup_faria.py` uses SQLite's consistent backup API, verifies integrity and migration metadata, requires `age` encryption, writes an atomic encrypted artifact plus non-sensitive manifest, removes plaintext staging material, and retains only the latest 14 matching FARIA backups.
+
+`verify_restore.py` verifies the encrypted checksum when present, decrypts into temporary storage, checks SQLite integrity/foreign keys/required tables/migrations, and removes the plaintext restore copy. It never replaces the live database.
+
+Configuration, safe commands, and the manual disaster-recovery procedure are documented in `docs/05_operations/RUNBOOK.md`.

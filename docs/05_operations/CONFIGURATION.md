@@ -109,9 +109,36 @@ FARIA owns only these architectural expectations:
 
 Spouse onboarding and an actual rejection test from a non-allowlisted identity remain required before shared household use is considered accepted.
 
-## 5. Related Documents
+## 5. Backup and Recovery Configuration
+
+RF-07A adds operator-side scripts only; backup configuration is not stored in Household MCP, Telegram, cron jobs, or the dashboard.
+
+| Variable / argument | Ownership | Purpose |
+|---|---|---|
+| `--source` / `FARIA_DB_PATH` | Household MCP/operator | Authoritative SQLite source; default remains `~/.faria/data/faria.db` |
+| `--backup-dir` / `FARIA_BACKUP_DIR` | Operator | Existing provider-neutral external backup directory |
+| `--recipient` / `FARIA_BACKUP_RECIPIENT` | Operator | Public `age` recipient used only for encryption |
+| `--identity` / `FARIA_BACKUP_IDENTITY` | Operator | Private recovery identity path used only for restore verification |
+
+The public recipient may be supplied to the backup process. The private identity must remain outside Git and is not required during backup. Do not place backup values in Hermes Telegram prompts or print them through configuration dumps.
+
+On POSIX systems, the authoritative database directory targets `0700`; SQLite, plaintext staging, encrypted artifacts, and manifests target `0600`. The scripts do not chmod unrelated parent or mount directories.
+
+The external backup directory must already exist. RF-07A intentionally does not create or configure S3, Google Drive, Dropbox, OneDrive, or another provider. A directory on the same disk as the live database is suitable for a local drill but does not count as the durable external copy.
+
+## 6. Secrets Ownership
+
+- **Hermes-managed:** Telegram bot token, endpoint credential, allowlist/member mapping, runtime configuration.
+- **9Router-managed:** OpenRouter/provider credentials and physical model routing.
+- **Operator-managed:** backup encryption private identity and external destination access.
+- **Repository:** no runtime secrets, provider credentials, Telegram IDs, database files, backups, or private recovery identities.
+
+Production/personal reminder workloads should use a stable paid primary model behind `faria-household-main`. A free model may remain a later fallback if desired, but reliability-sensitive cron delivery must not intentionally depend on an overloaded/free primary. Physical model selection remains owned by 9Router and is not an FARIA architecture invariant.
+
+## 7. Related Documents
 
 - `docs/05_operations/DEVELOPER_SETUP.md`
+- `docs/05_operations/RUNBOOK.md`
 - `scripts/runtime/README.md`
 - `docs/02_architecture/SYSTEM_ARCHITECTURE.md`
 - `docs/standards/08_SECURITY_STANDARD.md`

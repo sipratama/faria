@@ -1,70 +1,58 @@
-# Runtime Verification — FARIA (RF-01)
+# Runtime Verification — FARIA (RF-07A)
 
-> RF-01 READY: runtime connectivity is proven for the accepted macOS development topology. This evidence does not cover Household MCP, SQLite, Monthly Allocation, or the dashboard.
+`scripts/runtime/check-runtime.sh` is the provider-neutral, non-mutating health command for the current personal runtime.
 
-## Accepted Topology
+## Checks
 
-```text
-Telegram
-   ↓
-Hermes Gateway (macOS launchd)
-   ↓
-Hermes Runtime (managed local install)
-   ↓
-9Router (local Docker/OrbStack :20128)
-   ↓
-faria-household-main
-   ↓
-OpenRouter → selected model
-```
+It reports `PASS`, `WARN`, or `FAIL` for:
 
-Hermes tool execution follows a separate path:
+- Python 3.11+ and the Household MCP executable;
+- authoritative SQLite presence, read-only open, `integrity_check`, `foreign_key_check`, migration `004`, and restrictive permissions;
+- local 9Router `/v1/models` reachability without inference;
+- `age` availability and external backup-directory readiness;
+- Hermes installation and launchd gateway supervision;
+- absence of RF-06 temporary `FARIA_DB_PATH` overrides;
+- primary MCP discovery and exactly 18 selected/allowlisted tools;
+- cron-readonly MCP discovery and exactly `routine_get` (`CRON_READONLY_OK`);
+- exact Telegram and cron platform toolsets;
+- disabled dangerous system tools on Telegram and cron;
+- Finance/Home Ops skill discovery;
+- cron scheduler status and RF-06 synthetic-job marker cleanup;
+- optional local dashboard API health.
 
-```text
-Hermes Runtime → Docker terminal sandbox → egress firewall
-```
+The dashboard being stopped is a warning. Database corruption, migration drift, gateway supervision failure, MCP/tool drift, cron security drift, or unreachable required runtime dependencies are failures.
 
-Docker is not the host for Hermes itself in this accepted topology.
+## Safety
 
-## Repeatable Non-Secret Checks
+The script does not:
 
-Run on the macOS host:
+- mutate household data;
+- create or run cron jobs;
+- send Telegram messages;
+- run a backup;
+- invoke model inference;
+- print database contents, Telegram IDs, credentials, private keys, full environment data, or full Hermes configuration.
+
+It reads only supported command output and safe configuration keys.
+
+## Usage
 
 ```bash
 scripts/runtime/check-runtime.sh
 ```
 
-The script checks:
+An alternative non-secret local models endpoint may be supplied as the first argument:
 
-- **A — 9Router endpoint reachable:** `http://127.0.0.1:20128/v1/models` responds; an unauthenticated `401` or `403` still proves endpoint reachability without reading a credential;
-- **B — Hermes installed:** `hermes --version` succeeds;
-- **C — gateway supervised:** `hermes gateway status` confirms the current launchd service definition is running, without recording its runtime-specific PID.
+```bash
+scripts/runtime/check-runtime.sh http://127.0.0.1:20128/v1/models
+```
 
-The script never reads or prints the Hermes credential store. Pass an alternative non-secret models URL as its first argument only when the local 9Router port differs.
+Run after Hermes upgrades, configuration edits, machine restart, application updates, and RF-07B deployment migration.
 
-## Recorded Manual Acceptance Evidence
+## Operational Evidence Boundary
 
-The following user-provided RF-01A observations are accepted evidence from the real local environment:
+Prior RF-01 connectivity and RF-06 `CRON_READONLY_OK` acceptance remain historical evidence. The script re-checks the lightweight configuration/security boundary but does not send test reminders or perform destructive routine acceptance.
 
-| Path | Prompt | Observed result | Status |
-|---|---|---|---|
-| macOS host → 9Router | Reach `http://127.0.0.1:20128` | Endpoint reachable | PASS |
-| Docker container → host 9Router | Reach `host.docker.internal:20128` | Endpoint reachable | PASS |
-| Hermes CLI → 9Router → `faria-household-main` → model | `Balas hanya dengan: FARIA runtime connected` | `FARIA runtime connected` | PASS |
-| Telegram → Hermes Gateway → 9Router → `faria-household-main` → model | `Balas hanya dengan: FARIA Telegram connected` | `FARIA Telegram connected` | PASS |
-| Hermes Gateway service | `hermes gateway status` | Service definition matched; gateway supervised by launchd | PASS |
+Production/personal reminder delivery should prefer a stable paid primary model behind `faria-household-main`. Physical provider model names remain 9Router-owned configuration and are never checked here.
 
-These smoke tests prove connectivity only. They do not establish latency, reliability, security, or model-quality guarantees.
-
-## Manual Recheck
-
-For normal chat, run `hermes` on the host and repeat the CLI prompt above.
-
-For Telegram, use an explicitly allowlisted account and repeat the Telegram prompt above. Never paste the bot token, API credentials, or numeric Telegram IDs into this repository or test output.
-
-## Outstanding Operational Checks
-
-- onboard and test the second household member before shared household use;
-- verify that a deliberately non-allowlisted Telegram identity is rejected or ignored.
-
-Only one allowlisted household member is currently configured and tested. Do not weaken the allowlist to make the rejection test easier. These follow-ups do not block RF-02 engineering work.
+See `docs/05_operations/RUNBOOK.md` for remediation and recovery procedures.
